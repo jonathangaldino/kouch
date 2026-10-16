@@ -300,6 +300,29 @@ struct PersistenceSwiftTests {
         #expect(received == ["draft"])
     }
 
+    @Test("a paused mutation with Void variables resumes after a disk round trip")
+    func voidMutationRoundTrip() async throws {
+        let source = TestEnv()
+        source.online.setOnline(false)
+        let paused = MutationObserver(client: source.client, options: MutationOptions<Void, String, Void>(mutationKey: ["sync"]) { _ in "x" })
+        Task { _ = try? await paused.mutate(()) }
+        await source.settle()
+        let storage = InMemoryQueryStorage()
+        try await source.client.save(to: StoragePersister(storage: storage, clock: source.clock))
+
+        let t = TestEnv()
+        let runs = CallCount()
+        t.client.setMutationDefaults(["sync"], MutationOptions<Void, String, Void> { _ in
+            runs.increment()
+            return "synced"
+        })
+        try await t.client.restore(from: StoragePersister(storage: storage, clock: t.clock))
+        await t.client.resumePausedMutations()
+        await t.settle()
+        #expect(runs.value == 1)
+        #expect(t.client.mutationCache.getAll().first?.status == .success)
+    }
+
     @Test("FileQueryStorage writes, reads and removes files")
     func fileStorage() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "swiftquery-\(UUID().uuidString)")
