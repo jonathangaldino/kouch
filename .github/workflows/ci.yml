@@ -28,7 +28,7 @@ jobs:
         run: Scripts/check-parity.sh
 
   swift:
-    name: SwiftQuery
+    name: Kouch
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,9 +38,9 @@ jobs:
       - run: swift --version
       - name: Test (macOS)
         run: swift test
-      - name: Build SwiftQuery (iOS)
-        run: xcodebuild -scheme SwiftQuery -destination 'generic/platform=iOS' build
-      - name: Build SwiftQuerySwiftUI (iOS)
-        run: xcodebuild -scheme SwiftQuerySwiftUI -destination 'generic/platform=iOS' build
+      - name: Build Kouch (iOS)
+        run: xcodebuild -scheme Kouch -destination 'generic/platform=iOS' build
+      - name: Build KouchSwiftUI (iOS)
+        run: xcodebuild -scheme KouchSwiftUI -destination 'generic/platform=iOS' build
       - name: No UI frameworks in the core
-        run: "! grep -rlE 'import (SwiftUI|UIKit|AppKit)' Sources/SwiftQuery"
+        run: "! grep -rlE 'import (SwiftUI|UIKit|AppKit)' Sources/Kouch"

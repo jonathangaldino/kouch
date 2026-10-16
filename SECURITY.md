@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-SwiftQuery is pre-1.0. Security fixes go into the latest release only.
+Kouch is pre-1.0. Security fixes go into the latest release only.
 
 ## Reporting a vulnerability
 

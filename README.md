@@ -1,4 +1,7 @@
-# SwiftQuery
+# Kouch
+
+**Sit back on the couch. Kouch handles the caching.** Fetching, caching, deduplication, background refetching,
+retries, garbage collection and persistence for server data in Swift and SwiftUI, so you don't have to.
 
 [![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
 [![Swift versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FOWNER%2FREPO%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/OWNER/REPO)
@@ -7,17 +10,17 @@
 
 > **Built on the shoulders of [TanStack Query](https://tanstack.com/query).** Every behavior in this package is
 > TanStack Query's design, verified against its real implementation. Huge thanks to Tanner Linsley and the TanStack
-> contributors: if SwiftQuery is useful to you, [star TanStack Query](https://github.com/TanStack/query) and
+> contributors: if Kouch is useful to you, [star TanStack Query](https://github.com/TanStack/query) and
 > [sponsor TanStack](https://github.com/sponsors/tannerlinsley). See [ACKNOWLEDGEMENTS](ACKNOWLEDGEMENTS.md).
 
 A behavioral port of [TanStack Query](https://tanstack.com/query) (`@tanstack/query-core@5.104.3`) to Swift.
-TanStack is the **specification**, not code to translate: given the same scenario, SwiftQuery behaves like
+TanStack is the **specification**, not code to translate: given the same scenario, Kouch behaves like
 TanStack Query, built with idiomatic Swift underneath (`@MainActor` classes, `async`/`await`, `AsyncStream`).
 
 Two libraries, both iOS 17+ / macOS 14+, Swift 6 language mode:
 
-- `SwiftQuery`: the core. No UI dependencies (no SwiftUI or UIKit).
-- `SwiftQuerySwiftUI`: property wrappers and environment integration on top of the core.
+- `Kouch`: the core. No UI dependencies (no SwiftUI or UIKit).
+- `KouchSwiftUI`: property wrappers and environment integration on top of the core.
 
 > **Status:** pre-1.0 (0.1.0). The behavior is covered by 176 scenarios checked against TanStack, but the API
 > may still change between minor versions. Developed and tested with Swift 6.4 (Xcode 27).
@@ -30,12 +33,12 @@ Swift Package Manager:
 .package(url: "https://github.com/OWNER/REPO.git", from: "0.1.0")
 ```
 
-Then add `"SwiftQuery"` (and `"SwiftQuerySwiftUI"` for the SwiftUI wrappers) to your target's dependencies.
+Then add `"Kouch"` (and `"KouchSwiftUI"` for the SwiftUI wrappers) to your target's dependencies.
 
 ## Usage
 
 ```swift
-import SwiftQuery
+import Kouch
 
 let client = QueryClient()
 client.mount() // react to focus / reconnect
@@ -58,7 +61,7 @@ await client.invalidateQueries(QueryFilters(queryKey: ["user"]))
 With SwiftUI:
 
 ```swift
-import SwiftQuerySwiftUI
+import KouchSwiftUI
 
 @main struct MyApp: App {
     let client = QueryClient()
@@ -99,19 +102,19 @@ view update and subscribe / apply new options right after it, so no observable s
 |---|---|
 | `Specs/` | Behavioral contracts (21 files, 176 scenarios). Each scenario has an ID, for example `[dedup-001]`. |
 | `Conformance/tanstack/` | Every scenario run against real TanStack (vitest with fake timers), including `query-persist-client-core` and `query-async-storage-persister`. |
-| `Sources/SwiftQuery/` | The core implementation. |
-| `Sources/SwiftQuerySwiftUI/` | The SwiftUI adapter. |
-| `Tests/SwiftQueryTests/` | Every scenario, mirrored in Swift Testing with a virtual `TestClock`, plus SwiftUI adapter tests (including a real `NSHostingView` render). |
+| `Sources/Kouch/` | The core implementation. |
+| `Sources/KouchSwiftUI/` | The SwiftUI adapter. |
+| `Tests/KouchTests/` | Every scenario, mirrored in Swift Testing with a virtual `TestClock`, plus SwiftUI adapter tests (including a real `NSHostingView` render). |
 | `Scripts/check-parity.sh` | Fails if a scenario ID is missing from the specs or from either suite. |
 
 ## Verify
 
 ```bash
 (cd Conformance/tanstack && npm install && npx vitest run)   # TanStack obeys the spec
-swift test                                                  # SwiftQuery obeys the spec
+swift test                                                  # Kouch obeys the spec
 Scripts/check-parity.sh                                     # same scenarios on both sides
-xcodebuild -scheme SwiftQuery -destination 'generic/platform=iOS' build
-xcodebuild -scheme SwiftQuerySwiftUI -destination 'generic/platform=iOS' build
+xcodebuild -scheme Kouch -destination 'generic/platform=iOS' build
+xcodebuild -scheme KouchSwiftUI -destination 'generic/platform=iOS' build
 ```
 
 ## Scope
@@ -135,7 +138,7 @@ sharing, dehydrating pending promises for server-side rendering).
 
 ## Deliberate Swift differences
 
-| TanStack | SwiftQuery | Why |
+| TanStack | Kouch | Why |
 |---|---|---|
 | Keys are hashed with JSON.stringify, so `1` and `1.0` are the same key | `QueryKeyValue.int(1)` and `.double(1.0)` are different keys | Swift typing |
 | `staleTime`, `refetchOn*`, `refetchInterval` can be functions | `.dynamic { query in ... }` cases on `StaleTime`, `RefetchTrigger`, `RefetchInterval`; the closure gets `AnyQuery` (cast to `Query<Data>` for typed state) | One option type per tunable |
@@ -165,11 +168,11 @@ security issues privately (see [SECURITY](SECURITY.md)).
 
 ## Acknowledgements
 
-SwiftQuery is a tribute to [TanStack Query](https://github.com/TanStack/query): its API, its semantics and the
+Kouch is a tribute to [TanStack Query](https://github.com/TanStack/query): its API, its semantics and the
 thought behind every edge case are theirs. Thank you, Tanner Linsley and every TanStack contributor. See
 [ACKNOWLEDGEMENTS](ACKNOWLEDGEMENTS.md) for details and TanStack Query's license.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). SwiftQuery is an independent project and is not affiliated with or endorsed by
+MIT. See [LICENSE](LICENSE). Kouch is an independent project and is not affiliated with or endorsed by
 TanStack.

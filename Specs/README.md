@@ -1,12 +1,12 @@
-# SwiftQuery Behavioral Specification
+# Kouch Behavioral Specification
 
 These documents are **behavioral contracts**, not architecture. They describe what TanStack Query
-(`@tanstack/query-core@5.104.3`) does in a given scenario. SwiftQuery must do the same.
+(`@tanstack/query-core@5.104.3`) does in a given scenario. Kouch must do the same.
 
 Every scenario has a stable ID (`[dedup-001]`). The same ID appears in:
 
 - `Conformance/tanstack/tests/*.test.ts` — proves the scenario against real TanStack.
-- `Tests/SwiftQueryTests/*.swift` — proves SwiftQuery behaves identically.
+- `Tests/KouchTests/*.swift` — proves Kouch behaves identically.
 
 `Scripts/check-parity.sh` fails if an ID is missing from either suite.
 

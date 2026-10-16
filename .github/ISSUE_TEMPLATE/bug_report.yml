@@ -1,5 +1,5 @@
 name: Bug report
-description: SwiftQuery behaves differently from TanStack Query, or crashes.
+description: Kouch behaves differently from TanStack Query, or crashes.
 labels: [bug]
 body:
   - type: textarea
@@ -23,13 +23,13 @@ body:
   - type: textarea
     id: actual
     attributes:
-      label: What SwiftQuery does
+      label: What Kouch does
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: SwiftQuery version
+      label: Kouch version
     validations:
       required: true
   - type: input

@@ -5,4 +5,4 @@ contact_links:
     about: Please report security problems privately.
   - name: TanStack Query documentation
     url: https://tanstack.com/query/latest/docs/framework/react/overview
-    about: The behavior SwiftQuery follows is documented there.
+    about: The behavior Kouch follows is documented there.

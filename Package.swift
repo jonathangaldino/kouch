@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "SwiftQuery",
+    name: "Kouch",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
-        .library(name: "SwiftQuery", targets: ["SwiftQuery"]),
-        .library(name: "SwiftQuerySwiftUI", targets: ["SwiftQuerySwiftUI"]),
+        .library(name: "Kouch", targets: ["Kouch"]),
+        .library(name: "KouchSwiftUI", targets: ["KouchSwiftUI"]),
     ],
     targets: [
-        .target(name: "SwiftQuery"),
-        .target(name: "SwiftQuerySwiftUI", dependencies: ["SwiftQuery"]),
-        .testTarget(name: "SwiftQueryTests", dependencies: ["SwiftQuery", "SwiftQuerySwiftUI"]),
+        .target(name: "Kouch"),
+        .target(name: "KouchSwiftUI", dependencies: ["Kouch"]),
+        .testTarget(name: "KouchTests", dependencies: ["Kouch", "KouchSwiftUI"]),
     ]
 )

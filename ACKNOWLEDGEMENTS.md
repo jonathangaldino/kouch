@@ -2,16 +2,16 @@
 
 ## TanStack Query
 
-SwiftQuery would not exist without [TanStack Query](https://tanstack.com/query) by
+Kouch would not exist without [TanStack Query](https://tanstack.com/query) by
 [Tanner Linsley](https://github.com/tannerlinsley) and the
 [TanStack contributors](https://github.com/TanStack/query/graphs/contributors).
 
 TanStack Query changed how a generation of apps think about server state: caching, deduplication,
 stale-while-revalidate, garbage collection, retries, invalidation and persistence, all behind a small, honest
-API. Years of careful design, edge-case handling and an extraordinary test suite went into it. SwiftQuery stands
+API. Years of careful design, edge-case handling and an extraordinary test suite went into it. Kouch stands
 entirely on that work.
 
-SwiftQuery is a **behavioral port**. TanStack Query's code was not translated or copied. Its behavior is the
+Kouch is a **behavioral port**. TanStack Query's code was not translated or copied. Its behavior is the
 specification:
 
 - `Specs/` describes TanStack Query's behavior in Given/When/Then scenarios.
@@ -21,9 +21,9 @@ specification:
 - The Swift implementation must pass the same scenarios.
 
 TanStack Query's API names, option names and documented semantics are reused deliberately, so knowledge carries
-over between the two. Any mistakes in SwiftQuery are ours, not theirs.
+over between the two. Any mistakes in Kouch are ours, not theirs.
 
-If SwiftQuery helps you, please consider [sponsoring TanStack](https://github.com/sponsors/tannerlinsley) and
+If Kouch helps you, please consider [sponsoring TanStack](https://github.com/sponsors/tannerlinsley) and
 giving [TanStack Query](https://github.com/TanStack/query) a star.
 
 TanStack Query is distributed under the following license:

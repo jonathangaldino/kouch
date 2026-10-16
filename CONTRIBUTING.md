@@ -1,22 +1,22 @@
-# Contributing to SwiftQuery
+# Contributing to Kouch
 
-Thanks for helping. SwiftQuery is a **behavioral port** of TanStack Query: given the same scenario it must behave
+Thanks for helping. Kouch is a **behavioral port** of TanStack Query: given the same scenario it must behave
 the same way. Every change follows from that.
 
 ## Ground rules
 
-- **TanStack Query is the specification.** If SwiftQuery and TanStack disagree, SwiftQuery is wrong, unless the
+- **TanStack Query is the specification.** If Kouch and TanStack disagree, Kouch is wrong, unless the
   difference is listed (with its reason) under "Deliberate Swift differences" in the README.
 - **Behavior lands with three pieces, in this order:**
   1. a scenario in `Specs/*.md` with a new ID such as `[inv-008]`,
   2. a test with that ID in `Conformance/tanstack/tests/` that passes against real TanStack,
-  3. a Swift Testing test with the same ID in `Tests/SwiftQueryTests/`.
+  3. a Swift Testing test with the same ID in `Tests/KouchTests/`.
 
   When the TanStack test disagrees with what you wrote in the spec, fix the spec. Never edit TanStack's
   behavior to fit.
 - **Idiomatic Swift, not translated JavaScript.** Core types are `@MainActor`, query functions are `async`, and
   the code compiles cleanly in Swift 6 language mode with strict concurrency.
-- **`SwiftQuery` stays free of UI frameworks.** SwiftUI code belongs in `SwiftQuerySwiftUI`.
+- **`Kouch` stays free of UI frameworks.** SwiftUI code belongs in `KouchSwiftUI`.
 - **Keep changes small.** One behavior per pull request is easiest to review.
 
 ## Setup
@@ -34,17 +34,17 @@ cd REPO
 
 ```bash
 (cd Conformance/tanstack && npx vitest run)                                   # TanStack obeys the specs
-swift test                                                                    # SwiftQuery obeys the specs
+swift test                                                                    # Kouch obeys the specs
 Scripts/check-parity.sh                                                       # same scenario IDs everywhere
-xcodebuild -scheme SwiftQuery -destination 'generic/platform=iOS' build
-xcodebuild -scheme SwiftQuerySwiftUI -destination 'generic/platform=iOS' build
+xcodebuild -scheme Kouch -destination 'generic/platform=iOS' build
+xcodebuild -scheme KouchSwiftUI -destination 'generic/platform=iOS' build
 ```
 
 ## Writing tests
 
 - **TanStack side:** use the helpers in `Conformance/tanstack/tests/helpers.ts`. Time is faked with vitest: use
   `settle()` to let promises run and `advance(ms)` to move time.
-- **Swift side:** use `TestEnv` from `Tests/SwiftQueryTests/Support/TestSupport.swift`. It provides a virtual
+- **Swift side:** use `TestEnv` from `Tests/KouchTests/Support/TestSupport.swift`. It provides a virtual
   `TestClock`, its own online and focus managers, and a client. Use `await t.settle()` and `await t.advance(ms)`
   the same way. Prefer the controllable query functions (`Controlled`, `Immediate`, `Failing`) over real delays.
 - Assert the numbered "Then" items of the scenario, one by one.
@@ -52,7 +52,7 @@ xcodebuild -scheme SwiftQuerySwiftUI -destination 'generic/platform=iOS' build
 ## Upgrading the TanStack version
 
 Bump the exact versions in `Conformance/tanstack/package.json` and run the TanStack suite. Every failure is a
-behavior change upstream: update the spec, then make SwiftQuery match, and note it in `CHANGELOG.md`.
+behavior change upstream: update the spec, then make Kouch match, and note it in `CHANGELOG.md`.
 
 ## Pull requests
 

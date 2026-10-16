@@ -11,11 +11,11 @@ contain breaking changes.
 
 First release: a behavioral port of TanStack Query (`@tanstack/query-core` 5.104.3,
 `@tanstack/query-persist-client-core` 5.104.3 and `@tanstack/query-async-storage-persister` 5.104.3). It is checked
-by 176 scenarios that run against both TanStack and SwiftQuery.
+by 176 scenarios that run against both TanStack and Kouch.
 
 ### Added
 
-- `SwiftQuery` core:
+- `Kouch` core:
   - Query keys, query state, `Query`, `QueryCache`, `QueryClient` and `QueryObserver`, including
     `getOptimisticResult` and an `AsyncStream` of results.
   - Stale time, garbage collection, deduplication, retries and backoff, cancellation (including abort when the last
@@ -35,7 +35,7 @@ by 176 scenarios that run against both TanStack and SwiftQuery.
       `.enabled { }`, `.initialData { }`.
     - `retryOnMount`, `skipToken`, and `throwOnError` on refetches.
     - `getQueriesData` / `setQueriesData`, `mutationCache.find`.
-- `SwiftQuerySwiftUI`:
+- `KouchSwiftUI`:
   - `.queryClient(_:)` and `.queryClient(_:persister:)`, which restores the cache before queries mount.
   - `@ObservedQuery`, `@ObservedSelectQuery`, `@ObservedInfiniteQuery`, `@ObservedQueries`, `@ObservedMutation`,
     `@ObservedIsFetching`, `@ObservedIsMutating` and `@ObservedMutationState`.
