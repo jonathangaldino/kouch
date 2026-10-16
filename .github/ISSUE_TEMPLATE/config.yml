@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/OWNER/REPO/security/advisories/new
+    url: https://github.com/jonathangaldino/kouch/security/advisories/new
     about: Please report security problems privately.
   - name: TanStack Query documentation
     url: https://tanstack.com/query/latest/docs/framework/react/overview

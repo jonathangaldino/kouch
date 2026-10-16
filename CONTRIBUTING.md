@@ -25,8 +25,8 @@ Requirements: a Swift 6 toolchain and Node.js 20 or newer. The package is develo
 (Xcode 27); older Swift 6 compilers have not been verified.
 
 ```bash
-git clone https://github.com/OWNER/REPO.git
-cd REPO
+git clone https://github.com/jonathangaldino/kouch.git
+cd kouch
 (cd Conformance/tanstack && npm ci)
 ```
 

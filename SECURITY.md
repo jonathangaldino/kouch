@@ -9,7 +9,7 @@ Kouch is pre-1.0. Security fixes go into the latest release only.
 Please **do not open a public issue** for security problems.
 
 Report them privately through GitHub's
-[private vulnerability reporting](https://github.com/OWNER/REPO/security/advisories/new) for this repository.
+[private vulnerability reporting](https://github.com/jonathangaldino/kouch/security/advisories/new) for this repository.
 Include what you found, how to reproduce it, and the impact you expect.
 
 You can expect an acknowledgement within a few days. We will keep you updated while we investigate, and credit you

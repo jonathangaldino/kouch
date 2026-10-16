@@ -40,5 +40,5 @@ by 176 scenarios that run against both TanStack and Kouch.
   - `@ObservedQuery`, `@ObservedSelectQuery`, `@ObservedInfiniteQuery`, `@ObservedQueries`, `@ObservedMutation`,
     `@ObservedIsFetching`, `@ObservedIsMutating` and `@ObservedMutationState`.
 
-[Unreleased]: https://github.com/OWNER/REPO/compare/0.1.0...HEAD
-[0.1.0]: https://github.com/OWNER/REPO/releases/tag/0.1.0
+[Unreleased]: https://github.com/jonathangaldino/kouch/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/jonathangaldino/kouch/releases/tag/0.1.0

@@ -3,9 +3,9 @@
 **Sit back on the couch. Kouch handles the caching.** Fetching, caching, deduplication, background refetching,
 retries, garbage collection and persistence for server data in Swift and SwiftUI, so you don't have to.
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-[![Swift versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FOWNER%2FREPO%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/OWNER/REPO)
-[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FOWNER%2FREPO%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/OWNER/REPO)
+[![CI](https://github.com/jonathangaldino/kouch/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathangaldino/kouch/actions/workflows/ci.yml)
+[![Swift versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fjonathangaldino%2Fkouch%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/jonathangaldino/kouch)
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fjonathangaldino%2Fkouch%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/jonathangaldino/kouch)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **Built on the shoulders of [TanStack Query](https://tanstack.com/query).** Every behavior in this package is
@@ -30,7 +30,7 @@ Two libraries, both iOS 17+ / macOS 14+, Swift 6 language mode:
 Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/OWNER/REPO.git", from: "0.1.0")
+.package(url: "https://github.com/jonathangaldino/kouch.git", from: "0.1.0")
 ```
 
 Then add `"Kouch"` (and `"KouchSwiftUI"` for the SwiftUI wrappers) to your target's dependencies.
