@@ -3,3 +3,8 @@ original/
 .swiftpm/
 node_modules/
 .DS_Store
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.vscode/
+.idea/

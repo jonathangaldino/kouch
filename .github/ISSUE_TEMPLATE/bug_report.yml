@@ -1,0 +1,44 @@
+name: Bug report
+description: SwiftQuery behaves differently from TanStack Query, or crashes.
+labels: [bug]
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: Given / When / Then, like the files in Specs/. Minimal code helps most.
+      placeholder: |
+        Given: an observer on ["user", 1] with staleTime 1000
+        When: ...
+        Then: ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What TanStack Query does
+      description: The expected behavior. A link to TanStack docs or a TanStack snippet is ideal.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What SwiftQuery does
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SwiftQuery version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Platform and Xcode
+      placeholder: iOS 18.2 simulator, Xcode 16.2
+  - type: input
+    id: scenario-id
+    attributes:
+      label: Related scenario IDs (optional)
+      placeholder: "[gc-003]"

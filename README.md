@@ -1,5 +1,15 @@
 # SwiftQuery
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![Swift versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FOWNER%2FREPO%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/OWNER/REPO)
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FOWNER%2FREPO%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/OWNER/REPO)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+> **Built on the shoulders of [TanStack Query](https://tanstack.com/query).** Every behavior in this package is
+> TanStack Query's design, verified against its real implementation. Huge thanks to Tanner Linsley and the TanStack
+> contributors: if SwiftQuery is useful to you, [star TanStack Query](https://github.com/TanStack/query) and
+> [sponsor TanStack](https://github.com/sponsors/tannerlinsley). See [ACKNOWLEDGEMENTS](ACKNOWLEDGEMENTS.md).
+
 A behavioral port of [TanStack Query](https://tanstack.com/query) (`@tanstack/query-core@5.104.3`) to Swift.
 TanStack is the **specification**, not code to translate: given the same scenario, SwiftQuery behaves like
 TanStack Query, built with idiomatic Swift underneath (`@MainActor` classes, `async`/`await`, `AsyncStream`).
@@ -8,6 +18,21 @@ Two libraries, both iOS 17+ / macOS 14+, Swift 6 language mode:
 
 - `SwiftQuery`: the core. No UI dependencies (no SwiftUI or UIKit).
 - `SwiftQuerySwiftUI`: property wrappers and environment integration on top of the core.
+
+> **Status:** pre-1.0 (0.1.0). The behavior is covered by 176 scenarios checked against TanStack, but the API
+> may still change between minor versions. Developed and tested with Swift 6.4 (Xcode 27).
+
+## Installation
+
+Swift Package Manager:
+
+```swift
+.package(url: "https://github.com/OWNER/REPO.git", from: "0.1.0")
+```
+
+Then add `"SwiftQuery"` (and `"SwiftQuerySwiftUI"` for the SwiftUI wrappers) to your target's dependencies.
+
+## Usage
 
 ```swift
 import SwiftQuery
@@ -131,3 +156,20 @@ sharing, dehydrating pending promises for server-side rendering).
 | `hydrate` restores paused mutations using `setMutationDefaults({ mutationFn })` | Same, but the defaults must be registered with the typed `setMutationDefaults(_:_: MutationOptions)` overload; mutations with unregistered keys are skipped | The mutation function and its types must be known to resume |
 | Persisted data is whatever `JSON.stringify` makes of it | Data, variables and context must be `Encodable` to be persisted (others are skipped). They are stored as JSON and decoded lazily with the type of the first typed read; data that no longer decodes is dropped. Errors are not persisted | No runtime type information on disk |
 | `useQuery` supports `select` | `@ObservedQuery<Data>` has no `select`; use `QueryObserver` directly or derive in `body` | Lets the wrapper infer its type from `QueryObserverResult<Data>` |
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING](CONTRIBUTING.md) first: every behavior change starts as a spec
+scenario that passes against TanStack Query. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md), and report
+security issues privately (see [SECURITY](SECURITY.md)).
+
+## Acknowledgements
+
+SwiftQuery is a tribute to [TanStack Query](https://github.com/TanStack/query): its API, its semantics and the
+thought behind every edge case are theirs. Thank you, Tanner Linsley and every TanStack contributor. See
+[ACKNOWLEDGEMENTS](ACKNOWLEDGEMENTS.md) for details and TanStack Query's license.
+
+## License
+
+MIT. See [LICENSE](LICENSE). SwiftQuery is an independent project and is not affiliated with or endorsed by
+TanStack.

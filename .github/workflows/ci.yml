@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tanstack:
+    name: Specs against TanStack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Conformance/tanstack/package-lock.json
+      - run: npm ci
+        working-directory: Conformance/tanstack
+      - run: npx vitest run
+        working-directory: Conformance/tanstack
+      - name: Scenario parity
+        run: Scripts/check-parity.sh
+
+  swift:
+    name: SwiftQuery
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: swift --version
+      - name: Test (macOS)
+        run: swift test
+      - name: Build SwiftQuery (iOS)
+        run: xcodebuild -scheme SwiftQuery -destination 'generic/platform=iOS' build
+      - name: Build SwiftQuerySwiftUI (iOS)
+        run: xcodebuild -scheme SwiftQuerySwiftUI -destination 'generic/platform=iOS' build
+      - name: No UI frameworks in the core
+        run: "! grep -rlE 'import (SwiftUI|UIKit|AppKit)' Sources/SwiftQuery"

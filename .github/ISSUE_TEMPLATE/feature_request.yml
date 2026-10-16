@@ -1,0 +1,23 @@
+name: Feature request
+description: Port a TanStack Query feature, or improve the Swift API.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: Feature
+      description: Which TanStack Query feature or option (with a docs link), or which Swift API problem.
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What you are building and why the current API falls short.
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: Proposed Swift API (optional)
+      render: swift
