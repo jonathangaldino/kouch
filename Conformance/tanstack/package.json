@@ -1,0 +1,10 @@
+{
+  "name": "swiftquery-conformance",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "vitest run" },
+  "devDependencies": {
+    "@tanstack/query-core": "5.104.3",
+    "vitest": "3.2.4"
+  }
+}
