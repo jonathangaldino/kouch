@@ -52,12 +52,11 @@ xcodebuild -scheme KouchSwiftUI -destination 'generic/platform=iOS' build
 ## Upgrading the TanStack version
 
 Bump the exact versions in `Conformance/tanstack/package.json` and run the TanStack suite. Every failure is a
-behavior change upstream: update the spec, then make Kouch match, and note it in `CHANGELOG.md`.
+behavior change upstream: update the spec, then make Kouch match, and describe the change in the pull request.
 
 ## Pull requests
 
 - Describe the behavior and list the scenario IDs you added or changed.
-- Add an entry under "Unreleased" in `CHANGELOG.md` for anything user-visible.
 - By contributing you agree that your contribution is licensed under the MIT License (see `LICENSE`).
 
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
