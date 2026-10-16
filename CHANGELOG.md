@@ -7,7 +7,7 @@ contain breaking changes.
 
 ## [Unreleased]
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-16
 
 First release: a behavioral port of TanStack Query (`@tanstack/query-core` 5.104.3,
 `@tanstack/query-persist-client-core` 5.104.3 and `@tanstack/query-async-storage-persister` 5.104.3). It is checked
