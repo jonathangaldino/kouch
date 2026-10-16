@@ -7,6 +7,11 @@ contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- `Examples/KouchDemo`: a small SwiftUI app on the Star Wars API showing the main features.
+- Project logo, a mutation example and a table of the SwiftUI wrappers in the README.
+
 ## [0.1.0] - 2026-10-16
 
 First release: a behavioral port of TanStack Query (`@tanstack/query-core` 5.104.3,
