@@ -51,6 +51,18 @@ struct UserView: View {
 }
 ```
 
+To keep the cache across launches (instant data at cold start, offline launch, paused mutations that survive
+the app being killed), give the client a persister. It restores before any query mounts, then saves on
+every change (throttled to once per second):
+
+```swift
+WindowGroup {
+    RootView().queryClient(client, persister: StoragePersister()) { await client.resumePausedMutations() }
+}
+```
+
+Persisted data must be `Codable`. It is stored as JSON and decoded the first time its key is read with a type.
+
 `@ObservedInfiniteQuery` (`$feed.fetchNextPage()`) and `@ObservedMutation` (`try await $save.mutate(draft)`)
 work the same way. Like TanStack's React adapter, the wrappers render `getOptimisticResult` during the
 view update and subscribe / apply new options right after it, so no observable state changes mid-update.
@@ -59,8 +71,8 @@ view update and subscribe / apply new options right after it, so no observable s
 
 | Path | What |
 |---|---|
-| `Specs/` | Behavioral contracts (18 files, 143 scenarios). Each scenario has an ID, for example `[dedup-001]`. |
-| `Conformance/tanstack/` | Every scenario run against real TanStack (vitest with fake timers). |
+| `Specs/` | Behavioral contracts (19 files, 155 scenarios). Each scenario has an ID, for example `[dedup-001]`. |
+| `Conformance/tanstack/` | Every scenario run against real TanStack (vitest with fake timers), including `query-persist-client-core` and `query-async-storage-persister`. |
 | `Sources/SwiftQuery/` | The core implementation. |
 | `Sources/SwiftQuerySwiftUI/` | The SwiftUI adapter. |
 | `Tests/SwiftQueryTests/` | Every scenario, mirrored in Swift Testing with a virtual `TestClock`, plus SwiftUI adapter tests (including a real `NSHostingView` render). |
@@ -83,10 +95,13 @@ Implemented: query keys, query state machine, `Query`, `QueryCache`, `QueryClien
 cancellation (including abort-on-unmount when the signal is consumed), invalidation, network modes,
 focus refetching, mutations (`Mutation`, `MutationCache`, `MutationObserver`, scopes), infinite queries
 (`InfiniteQueryObserver`, `fetchInfiniteQuery`, `maxPages`), `QueriesObserver` with `combine`,
-`dehydrate` / `hydrate`, and the SwiftUI adapter.
+`dehydrate` / `hydrate`, persistence (`restore` / `save` / `subscribePersistence` / `persist`,
+`StoragePersister` with throttling and `removeOldestQuery` retry, `FileQueryStorage`), and the SwiftUI adapter
+(including restore-before-mount).
 
-Not yet: streamed queries, suspense, dehydrating pending queries' promises (streaming SSR), and the
-smaller options listed below.
+Not yet: streamed queries, suspense, per-query persisters (`experimental_createQueryPersister`), and the
+smaller options listed below. Dehydrating pending queries' promises is deliberately out: it only serves
+server-side rendering.
 
 ## Deliberate Swift differences
 
@@ -104,4 +119,5 @@ smaller options listed below.
 | `combine` output is deduped with `replaceEqualDeep` | Deduped with `==` when `Combined` is `Equatable`, otherwise every change notifies | No structural sharing |
 | Dehydrated data is any JSON value | Snapshot data is `any Sendable`; hydrating rebuilds each query with the data's dynamic type, and `deserializeData` gets the key so persisted bytes can be decoded to the right type. A query hydrated without data gets its type on first typed access | Swift generics need concrete types |
 | `hydrate` restores paused mutations using `setMutationDefaults({ mutationFn })` | Same, but the defaults must be registered with the typed `setMutationDefaults(_:_: MutationOptions)` overload; mutations with unregistered keys are skipped | The mutation function and its types must be known to resume |
+| Persisted data is whatever `JSON.stringify` makes of it | Data, variables and context must be `Encodable` to be persisted (others are skipped). They are stored as JSON and decoded lazily with the type of the first typed read; data that no longer decodes is dropped. Errors are not persisted | No runtime type information on disk |
 | `useQuery` supports `select` | `@ObservedQuery<Data>` has no `select`; use `QueryObserver` directly or derive in `body` | Lets the wrapper infer its type from `QueryObserverResult<Data>` |

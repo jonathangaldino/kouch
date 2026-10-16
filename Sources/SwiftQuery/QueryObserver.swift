@@ -241,12 +241,14 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
 
     /// What this observer will show for `options` once mounted, without fetching or notifying.
     /// Adapters call it while rendering, before they subscribe or apply new options. It creates the
-    /// query in the cache and becomes the current result.
-    public func getOptimisticResult(_ options: QueryObserverOptions<Data, Value>) -> QueryObserverResult<Value> {
+    /// query in the cache and becomes the current result. While a persisted cache is being restored
+    /// (`isRestoring`), the result never shows a fetch, because none starts until the restore is done.
+    public func getOptimisticResult(_ options: QueryObserverOptions<Data, Value>, isRestoring: Bool = false) -> QueryObserverResult<Value> {
         var options = options
         options.query = client.defaultQueryOptions(options.query)
         let query = client.queryCache.build(options.query)
-        let next = createResult(query: query, options: options, optimistic: true)
+        var next = createResult(query: query, options: options, optimistic: true)
+        if isRestoring { next.fetchStatus = .idle }
         if result.map({ !next.isSame(as: $0) }) ?? true { result = next }
         return next
     }

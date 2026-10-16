@@ -235,10 +235,10 @@ public final class InfiniteQueryObserver<Page: Sendable, PageParam: Sendable, Va
         base.setOptions(observerOptions)
     }
 
-    public func getOptimisticResult(_ options: InfiniteQueryOptions<Page, PageParam>) -> InfiniteQueryObserverResult<Value> {
+    public func getOptimisticResult(_ options: InfiniteQueryOptions<Page, PageParam>, isRestoring: Bool = false) -> InfiniteQueryObserverResult<Value> {
         var observerOptions = base.options
         observerOptions.query = options.queryOptions
-        return makeResult(base.getOptimisticResult(observerOptions), options: options)
+        return makeResult(base.getOptimisticResult(observerOptions, isRestoring: isRestoring), options: options)
     }
 
     /// Loads the page after the last one. With `cancelRefetch` (default) an in-flight fetch is replaced.

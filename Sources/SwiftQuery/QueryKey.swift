@@ -52,16 +52,45 @@ extension QueryKeyValue: CustomStringConvertible {
     }
 }
 
+/// Keys are JSON values, so they encode as JSON.
+extension QueryKeyValue: Codable {
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let b = try? c.decode(Bool.self) { self = .bool(b) }
+        else if let i = try? c.decode(Int.self) { self = .int(i) }
+        else if let d = try? c.decode(Double.self) { self = .double(d) }
+        else if let s = try? c.decode(String.self) { self = .string(s) }
+        else if let a = try? c.decode([QueryKeyValue].self) { self = .array(a) }
+        else { self = .object(try c.decode([String: QueryKeyValue].self)) }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .string(let s): try c.encode(s)
+        case .int(let i): try c.encode(i)
+        case .double(let d): try c.encode(d)
+        case .bool(let b): try c.encode(b)
+        case .null: try c.encodeNil()
+        case .array(let a): try c.encode(a)
+        case .object(let o): try c.encode(o)
+        }
+    }
+}
+
 /// Identity of a query: an ordered list of JSON-like values.
 ///
 /// ```swift
 /// let key: QueryKey = ["user", 123]
 /// let filtered: QueryKey = ["todos", ["status": "done"]]
 /// ```
-public struct QueryKey: Hashable, Sendable, ExpressibleByArrayLiteral, CustomStringConvertible {
+public struct QueryKey: Hashable, Sendable, ExpressibleByArrayLiteral, CustomStringConvertible, Codable {
     public var elements: [QueryKeyValue]
 
     public init(_ elements: [QueryKeyValue]) { self.elements = elements }
+    public init(from decoder: any Decoder) throws { elements = try [QueryKeyValue](from: decoder) }
+    public func encode(to encoder: any Encoder) throws { try elements.encode(to: encoder) }
     public init(arrayLiteral elements: QueryKeyValue...) { self.elements = elements }
 
     public var description: String { QueryKeyValue.array(elements).description }

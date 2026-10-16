@@ -205,7 +205,7 @@ public final class Query<Data: Sendable>: AnyQuery {
 
     /// Merges a newer snapshot into this query (TanStack `hydrate` on an existing query).
     override func applyHydrated(_ query: DehydratedQuery, data: (any Sendable)?) {
-        let typed = data as? Data
+        let typed = castOrDecode(data, as: Data.self)
         // shortcut: snapshot data of another type is ignored; deserializeData must return `Data`.
         if data != nil && typed == nil { return }
         var s = query.state.typed(data: typed)

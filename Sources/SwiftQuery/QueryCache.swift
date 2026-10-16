@@ -132,13 +132,26 @@ public final class QueryCache {
         return existing as? Query<Data> ?? retypeIfUntyped(existing, as: QueryOptions<Data>(key: key))
     }
 
-    /// A query hydrated without data has no known type yet; the first typed access fixes it.
+    /// A hydrated query without data, or with still-encoded persisted data, has no known type yet;
+    /// the first typed access fixes it (decoding the data when `Data` is `Decodable`).
     private func retypeIfUntyped<Data: Sendable>(_ existing: AnyQuery, as options: QueryOptions<Data>) -> Query<Data>? {
-        guard let untyped = existing as? Query<UntypedData>, untyped.observersCount == 0 else { return nil }
+        let state: QueryState<Data>
+        let config: QueryConfiguration
+        if let untyped = existing as? Query<UntypedData>, untyped.observersCount == 0 {
+            state = untyped.state.map { _ in nil }
+            config = untyped.options.config
+        } else if let encoded = existing as? Query<EncodedQueryData>, encoded.observersCount == 0 {
+            let decoded = encoded.state.data.flatMap { castOrDecode($0, as: Data.self) }
+            // Undecodable data (e.g. the type changed between app versions) is dropped.
+            state = decoded == nil ? QueryState() : encoded.state.map { _ in decoded }
+            config = encoded.options.config
+        } else {
+            return nil
+        }
         var typedOptions = options
-        typedOptions.config = options.config.merged(over: untyped.options.config)
-        let query = Query(options: typedOptions, cache: self, environment: environment, state: untyped.state.map { _ in nil })
-        untyped.clearGcTimer()
+        typedOptions.config = options.config.merged(over: config)
+        let query = Query(options: typedOptions, cache: self, environment: environment, state: state)
+        existing.clearGcTimer()
         queries[options.key] = query
         return query
     }

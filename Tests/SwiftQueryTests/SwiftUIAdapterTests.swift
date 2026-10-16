@@ -89,6 +89,29 @@ struct SwiftUIAdapterTests {
         #expect(t.client.getQueryData(["greeting"], as: String.self) == "hello")
         #expect(t.cache.find(["greeting"])?.observersCount == 1)
     }
+
+    @Test("persisting .queryClient restores before queries fetch")
+    func hostedPersistedView() async throws {
+        let source = TestEnv()
+        source.client.setQueryData(["greeting"], "from disk")
+        let storage = InMemoryQueryStorage()
+        try await source.client.save(to: StoragePersister(storage: storage, clock: source.clock))
+
+        let t = TestEnv()
+        let fn = Immediate("network")
+        let persister = StoragePersister(storage: storage, clock: t.clock)
+        let view = HostedQueryView(options: QueryOptions(key: ["greeting"], staleTime: .infinity, queryFn: fn.fn))
+            .queryClient(t.client, persister: persister)
+        let host = NSHostingView(rootView: view)
+        host.frame = CGRect(x: 0, y: 0, width: 200, height: 50)
+        for _ in 0..<5 {
+            host.layoutSubtreeIfNeeded()
+            await t.settle()
+        }
+        #expect(fn.count == 0)
+        #expect(t.client.getQueryData(["greeting"], as: String.self) == "from disk")
+        #expect(t.cache.find(["greeting"])?.observersCount == 1)
+    }
     #endif
 }
 

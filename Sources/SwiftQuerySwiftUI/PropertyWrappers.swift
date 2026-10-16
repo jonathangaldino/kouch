@@ -19,6 +19,7 @@ import SwiftUI
 @propertyWrapper
 public struct ObservedQuery<Data: Sendable>: DynamicProperty {
     @Environment(\.queryClient) private var client
+    @Environment(\.isRestoringQueries) private var isRestoring
     @State private var model = ObserverModel<QueryObserver<Data, Data>>()
     private let options: QueryObserverOptions<Data, Data>
 
@@ -33,8 +34,9 @@ public struct ObservedQuery<Data: Sendable>: DynamicProperty {
     public nonisolated func update() {
         let model = model
         let client = client
+        let isRestoring = isRestoring
         nonisolated(unsafe) let options = options
-        MainActor.assumeIsolated { model.update(client: requireClient(client), options: options) }
+        MainActor.assumeIsolated { model.update(client: requireClient(client), options: options, isRestoring: isRestoring) }
     }
 }
 
@@ -44,6 +46,7 @@ public struct ObservedQuery<Data: Sendable>: DynamicProperty {
 public struct ObservedInfiniteQuery<Page: Sendable, PageParam: Sendable>: DynamicProperty {
     public typealias Observer = InfiniteQueryObserver<Page, PageParam, InfiniteData<Page, PageParam>>
     @Environment(\.queryClient) private var client
+    @Environment(\.isRestoringQueries) private var isRestoring
     @State private var model = ObserverModel<Observer>()
     private let options: InfiniteQueryOptions<Page, PageParam>
 
@@ -56,8 +59,9 @@ public struct ObservedInfiniteQuery<Page: Sendable, PageParam: Sendable>: Dynami
     public nonisolated func update() {
         let model = model
         let client = client
+        let isRestoring = isRestoring
         nonisolated(unsafe) let options = options
-        MainActor.assumeIsolated { model.update(client: requireClient(client), options: options) }
+        MainActor.assumeIsolated { model.update(client: requireClient(client), options: options, isRestoring: isRestoring) }
     }
 }
 
@@ -67,6 +71,7 @@ public struct ObservedInfiniteQuery<Page: Sendable, PageParam: Sendable>: Dynami
 public struct ObservedMutation<Variables: Sendable, Data: Sendable, Context: Sendable>: DynamicProperty {
     public typealias Observer = MutationObserver<Variables, Data, Context>
     @Environment(\.queryClient) private var client
+    @Environment(\.isRestoringQueries) private var isRestoring
     @State private var model = ObserverModel<Observer>()
     private let options: MutationOptions<Variables, Data, Context>
 
@@ -79,7 +84,8 @@ public struct ObservedMutation<Variables: Sendable, Data: Sendable, Context: Sen
     public nonisolated func update() {
         let model = model
         let client = client
+        let isRestoring = isRestoring
         nonisolated(unsafe) let options = options
-        MainActor.assumeIsolated { model.update(client: requireClient(client), options: options) }
+        MainActor.assumeIsolated { model.update(client: requireClient(client), options: options, isRestoring: isRestoring) }
     }
 }

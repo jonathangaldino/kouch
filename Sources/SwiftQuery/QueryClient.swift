@@ -107,14 +107,14 @@ public final class QueryClient {
                 .merged(over: hydrateConfig.merged(over: defaultMutationConfiguration(for: dehydrated.mutationKey)))
             let s = dehydrated.state
             var state = MutationState<V, D, C>()
-            state.context = s.context as? C
-            state.data = s.data as? D
+            state.context = castOrDecode(s.context, as: C.self)
+            state.data = castOrDecode(s.data, as: D.self)
             state.error = s.error
             state.failureCount = s.failureCount
             state.failureReason = s.failureReason
             state.isPaused = s.isPaused
             state.status = s.status
-            state.variables = s.variables as? V
+            state.variables = castOrDecode(s.variables, as: V.self)
             state.submittedAt = s.submittedAt
             _ = mutationCache.build(restored, state: state)
         }))

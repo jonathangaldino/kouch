@@ -9,7 +9,7 @@ public protocol AdaptableObserver: AnyObject {
 
     static func make(client: QueryClient, options: Options) -> Self
     /// What the observer will show for `options`, computed without side effects visible to SwiftUI.
-    func optimisticResult(for options: Options) -> Result
+    func optimisticResult(for options: Options, isRestoring: Bool) -> Result
     func apply(_ options: Options)
     func subscribe(_ listener: @escaping @MainActor (Result) -> Void) -> Subscription
 }
@@ -34,16 +34,22 @@ final class ObserverModel<Observer: AdaptableObserver> {
         return displayed
     }
 
-    func update(client: QueryClient, options: Observer.Options) {
+    /// While `isRestoring`, nothing mounts or fetches; the view updates again once restoring ends.
+    func update(client: QueryClient, options: Observer.Options, isRestoring: Bool = false) {
         if let observer {
-            displayed = observer.optimisticResult(for: options)
-            Task { [weak self] in self?.observer?.apply(options) }
+            displayed = observer.optimisticResult(for: options, isRestoring: isRestoring)
+            if !isRestoring {
+                Task { [weak self] in
+                    self?.observer?.apply(options)
+                    self?.mount()
+                }
+            }
             return
         }
         let observer = Observer.make(client: client, options: options)
         self.observer = observer
-        displayed = observer.optimisticResult(for: options)
-        Task { [weak self] in self?.mount() }
+        displayed = observer.optimisticResult(for: options, isRestoring: isRestoring)
+        if !isRestoring { Task { [weak self] in self?.mount() } }
     }
 
     private func mount() {
@@ -66,8 +72,8 @@ extension QueryObserver: AdaptableObserver {
         Self(client: client, options: options)
     }
 
-    public func optimisticResult(for options: QueryObserverOptions<Data, Value>) -> QueryObserverResult<Value> {
-        getOptimisticResult(options)
+    public func optimisticResult(for options: QueryObserverOptions<Data, Value>, isRestoring: Bool) -> QueryObserverResult<Value> {
+        getOptimisticResult(options, isRestoring: isRestoring)
     }
 
     public func apply(_ options: QueryObserverOptions<Data, Value>) { setOptions(options) }
@@ -78,8 +84,8 @@ extension InfiniteQueryObserver: AdaptableObserver where Value == InfiniteData<P
         Self(client: client, options: options, placeholderData: nil, select: { $0 })
     }
 
-    public func optimisticResult(for options: InfiniteQueryOptions<Page, PageParam>) -> InfiniteQueryObserverResult<Value> {
-        getOptimisticResult(options)
+    public func optimisticResult(for options: InfiniteQueryOptions<Page, PageParam>, isRestoring: Bool) -> InfiniteQueryObserverResult<Value> {
+        getOptimisticResult(options, isRestoring: isRestoring)
     }
 
     public func apply(_ options: InfiniteQueryOptions<Page, PageParam>) { setOptions(options) }
@@ -90,7 +96,9 @@ extension MutationObserver: AdaptableObserver {
         Self(client: client, options: options)
     }
 
-    public func optimisticResult(for options: MutationOptions<Variables, Data, Context>) -> MutationObserverResult<Variables, Data, Context> {
+    public func optimisticResult(
+        for options: MutationOptions<Variables, Data, Context>, isRestoring: Bool
+    ) -> MutationObserverResult<Variables, Data, Context> {
         currentResult
     }
 

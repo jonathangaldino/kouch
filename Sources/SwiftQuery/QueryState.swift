@@ -1,20 +1,20 @@
 import Foundation
 
 /// Describes the data: has the query ever produced it?
-public enum QueryStatus: Sendable, Equatable {
+public enum QueryStatus: String, Sendable, Equatable, Codable {
     case pending
     case error
     case success
 }
 
 /// Which way an infinite query is loading more pages.
-public enum FetchDirection: Sendable, Equatable {
+public enum FetchDirection: String, Sendable, Equatable, Codable {
     case forward
     case backward
 }
 
 /// Describes the query function: is it running?
-public enum FetchStatus: Sendable, Equatable {
+public enum FetchStatus: String, Sendable, Equatable, Codable {
     case fetching
     case paused
     case idle

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum MutationStatus: Sendable, Equatable {
+public enum MutationStatus: String, Sendable, Equatable, Codable {
     case idle
     case pending
     case success
