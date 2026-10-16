@@ -24,6 +24,7 @@ public final class QueryClient {
     private var queryDefaults: [(key: QueryKey, config: QueryConfiguration)] = []
     private var mutationDefaults: [(key: QueryKey, config: MutationConfiguration)] = []
     private var mutationFactories: [(key: QueryKey, make: @MainActor (DehydratedMutation, MutationConfiguration) -> Void)] = []
+    private var typedMutationDefaults: [(key: QueryKey, options: Any)] = []
     private var mountCount = 0
     private var focusSubscription: Subscription?
     private var onlineSubscription: Subscription?
@@ -43,7 +44,9 @@ public final class QueryClient {
         self.defaultMutationOptions = defaultMutationOptions
         self.environment = QueryEnvironment(clock: clock, onlineManager: onlineManager, focusManager: focusManager)
         queryCache.environment = environment
+        queryCache.client = self
         mutationCache.environment = environment
+        mutationCache.client = self
     }
 
     // MARK: Mounting
@@ -87,6 +90,7 @@ public final class QueryClient {
     public func defaultQueryOptions<Data: Sendable>(_ options: QueryOptions<Data>) -> QueryOptions<Data> {
         var options = options
         options.config = options.config.merged(over: queryDefaults(for: options.key).merged(over: defaultOptions))
+        if options.skipToken { options.config.enabled = .value(false) }
         return options
     }
 
@@ -99,6 +103,8 @@ public final class QueryClient {
     /// with that key can be restored and resumed after `hydrate`.
     public func setMutationDefaults<V: Sendable, D: Sendable, C: Sendable>(_ key: QueryKey, _ options: MutationOptions<V, D, C>) {
         setMutationDefaults(key, options.config)
+        typedMutationDefaults.removeAll { $0.key == key }
+        typedMutationDefaults.append((key, options))
         mutationFactories.removeAll { $0.key == key }
         mutationFactories.append((key, { [unowned self] dehydrated, hydrateConfig in
             var restored = options
@@ -114,10 +120,23 @@ public final class QueryClient {
             state.failureReason = s.failureReason
             state.isPaused = s.isPaused
             state.status = s.status
-            state.variables = castOrDecode(s.variables, as: V.self)
+            state.variables = castOrDecode(s.variables, as: V.self) ?? voidValue(V.self)
             state.submittedAt = s.submittedAt
             _ = mutationCache.build(restored, state: state)
         }))
+    }
+
+    /// Options with client defaults, per-key configuration and typed per-key defaults (functions and
+    /// callbacks) filled in. Options set on `options` win.
+    public func defaultMutationOptions<V: Sendable, D: Sendable, C: Sendable>(_ options: MutationOptions<V, D, C>) -> MutationOptions<V, D, C> {
+        var merged = options
+        if let key = options.mutationKey {
+            for entry in typedMutationDefaults.reversed() where key.matches(entry.key) {
+                if let defaults = entry.options as? MutationOptions<V, D, C> { merged = merged.filled(from: defaults) }
+            }
+        }
+        merged.config = merged.config.merged(over: defaultMutationConfiguration(for: options.mutationKey))
+        return merged
     }
 
     func mutationFactory(for key: QueryKey) -> (@MainActor (DehydratedMutation, MutationConfiguration) -> Void)? {
@@ -176,7 +195,7 @@ public final class QueryClient {
         let defaulted = defaultQueryOptions(options)
         let query = queryCache.build(defaulted)
         guard let cached = query.state.data else { return try await fetchQuery(options) }
-        if revalidateIfStale && query.isStaleByTime(defaulted.config.resolvedStaleTime) {
+        if revalidateIfStale && query.isStaleByTime(defaulted.config.staleTime(for: query)) {
             _ = startFetchQuery(options)
         }
         return cached
@@ -186,7 +205,7 @@ public final class QueryClient {
         var defaulted = defaultQueryOptions(options)
         if defaulted.config.retry == nil { defaulted.config.retry = .never }
         let query = queryCache.build(defaulted)
-        if query.isStaleByTime(defaulted.config.resolvedStaleTime) {
+        if query.isStaleByTime(defaulted.config.staleTime(for: query)) {
             return query.fetch(defaulted)
         }
         let promise = Promise<Data>()
@@ -195,6 +214,21 @@ public final class QueryClient {
     }
 
     // MARK: Bulk operations
+
+    /// Key and data of every matching query holding `Data`.
+    public func getQueriesData<Data: Sendable>(_ filters: QueryFilters, as: Data.Type = Data.self) -> [(QueryKey, Data?)] {
+        queryCache.findAll(filters).compactMap { $0 as? Query<Data> }.map { ($0.queryKey, $0.state.data) }
+    }
+
+    /// Runs `updater` on every matching query holding `Data` (like ``setQueryData(_:as:updatedAt:_:)``).
+    @discardableResult
+    public func setQueriesData<Data: Sendable>(
+        _ filters: QueryFilters, as: Data.Type = Data.self, updatedAt: Date? = nil, _ updater: (Data?) -> Data?
+    ) -> [(QueryKey, Data?)] {
+        queryCache.findAll(filters).compactMap { $0 as? Query<Data> }.map { query in
+            (query.queryKey, setQueryData(query.queryKey, as: Data.self, updatedAt: updatedAt, updater))
+        }
+    }
 
     public func isFetching(_ filters: QueryFilters = .init()) -> Int {
         var filters = filters
@@ -224,6 +258,13 @@ public final class QueryClient {
     public func invalidateQueries(
         _ filters: QueryFilters = .init(), refetchType: RefetchType? = nil, cancelRefetch: Bool = true
     ) async {
+        try? await invalidateQueries(filters, refetchType: refetchType, cancelRefetch: cancelRefetch, throwOnError: false)
+    }
+
+    /// Like ``invalidateQueries(_:refetchType:cancelRefetch:)``; with `throwOnError`, rethrows refetch failures.
+    public func invalidateQueries(
+        _ filters: QueryFilters = .init(), refetchType: RefetchType? = nil, cancelRefetch: Bool = true, throwOnError: Bool
+    ) async throws {
         let matched = queryCache.findAll(filters)
         matched.forEach { $0.invalidate() }
         let type: QueryTypeFilter
@@ -236,16 +277,21 @@ public final class QueryClient {
         }
         var refetchFilters = filters
         refetchFilters.type = type
-        await refetchQueries(refetchFilters, cancelRefetch: cancelRefetch)
+        try await refetchQueries(refetchFilters, cancelRefetch: cancelRefetch, throwOnError: throwOnError)
     }
 
     /// Refetches matching queries that are neither disabled nor static. Waits for completion,
     /// except for paused queries.
     public func refetchQueries(_ filters: QueryFilters = .init(), cancelRefetch: Bool = true) async {
+        try? await refetchQueries(filters, cancelRefetch: cancelRefetch, throwOnError: false)
+    }
+
+    /// Like ``refetchQueries(_:cancelRefetch:)``; with `throwOnError`, rethrows the first failure.
+    public func refetchQueries(_ filters: QueryFilters = .init(), cancelRefetch: Bool = true, throwOnError: Bool) async throws {
         let tasks = queryCache.findAll(filters)
             .filter { !$0.isDisabled() && !$0.isStatic() }
-            .map { $0.refetch(cancelRefetch: cancelRefetch, throwOnError: false) }
-        for task in tasks { _ = try? await task.value }
+            .map { $0.refetch(cancelRefetch: cancelRefetch, throwOnError: throwOnError) }
+        for task in tasks { try await task.value }
     }
 
     public func resumePausedMutations() async {

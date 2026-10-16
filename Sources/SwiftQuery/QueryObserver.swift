@@ -198,16 +198,17 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
 
         let mounted = hasListeners
         let queryChanged = currentQuery !== prevQuery
-        let enabledChanged = config.isEnabled != prevOptions.query.config.isEnabled
+        let enabledChanged = config.isEnabled(for: currentQuery) != prevOptions.query.config.isEnabled(for: currentQuery)
         if mounted && shouldFetchOptionally(currentQuery, prevQuery, config, prevOptions.query.config) {
             _ = executeFetch()
         }
         updateResult()
-        if mounted && (queryChanged || enabledChanged || config.resolvedStaleTime != prevOptions.query.config.resolvedStaleTime) {
+        if mounted && (queryChanged || enabledChanged || config.staleTime(for: currentQuery) != prevOptions.query.config.staleTime(for: currentQuery)) {
             updateStaleTimer()
         }
-        if mounted && (queryChanged || enabledChanged || config.refetchInterval != currentRefetchInterval) {
-            updateIntervalTimer(config.refetchInterval)
+        let nextInterval = config.refetchInterval(for: currentQuery)
+        if mounted && (queryChanged || enabledChanged || nextInterval != currentRefetchInterval) {
+            updateIntervalTimer(nextInterval)
         }
     }
 
@@ -226,10 +227,26 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
         await fetch(cancelRefetch: cancelRefetch)
     }
 
+    /// Like ``refetch(cancelRefetch:)``; with `throwOnError`, a failed fetch throws instead of returning
+    /// an error result.
+    @discardableResult
+    public func refetch(cancelRefetch: Bool = true, throwOnError: Bool) async throws -> QueryObserverResult<Value> {
+        try await fetch(cancelRefetch: cancelRefetch, throwOnError: throwOnError)
+    }
+
     /// Fetches (optionally loading more pages in `direction`) and returns the resulting result.
     @discardableResult
     func fetch(cancelRefetch: Bool, direction: FetchDirection? = nil) async -> QueryObserverResult<Value> {
-        _ = try? await executeFetch(cancelRefetch: cancelRefetch, direction: direction).value
+        (try? await fetch(cancelRefetch: cancelRefetch, direction: direction, throwOnError: false)) ?? currentResult
+    }
+
+    func fetch(cancelRefetch: Bool, direction: FetchDirection? = nil, throwOnError: Bool) async throws -> QueryObserverResult<Value> {
+        do {
+            _ = try await executeFetch(cancelRefetch: cancelRefetch, direction: direction).value
+        } catch where throwOnError {
+            updateResult()
+            throw error
+        } catch {}
         updateResult()
         return currentResult
     }
@@ -268,11 +285,12 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
     // MARK: Fetch decisions
 
     private func isStale(_ query: Query<Data>, _ config: QueryConfiguration) -> Bool {
-        config.isEnabled && query.isStaleByTime(config.resolvedStaleTime)
+        config.isEnabled(for: query) && query.isStaleByTime(config.staleTime(for: query))
     }
 
     private func shouldFetchOnMount(_ query: Query<Data>, _ config: QueryConfiguration) -> Bool {
-        let shouldLoad = config.isEnabled && query.state.data == nil
+        let blockedByError = query.state.status == .error && config.retryOnMount == false
+        let shouldLoad = config.isEnabled(for: query) && query.state.data == nil && !blockedByError
         return shouldLoad || (query.state.data != nil && shouldFetch(query, config, on: config.refetchOnMount ?? .ifStale))
     }
 
@@ -280,15 +298,15 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
     private func shouldFetchOptionally(
         _ query: Query<Data>, _ prevQuery: Query<Data>, _ config: QueryConfiguration, _ prevConfig: QueryConfiguration
     ) -> Bool {
-        (query !== prevQuery || !prevConfig.isEnabled) && isStale(query, config)
+        (query !== prevQuery || !prevConfig.isEnabled(for: query)) && isStale(query, config)
     }
 
     private func shouldFetch(_ query: Query<Data>, _ config: QueryConfiguration, on trigger: RefetchTrigger) -> Bool {
-        guard config.isEnabled, config.resolvedStaleTime != .static else { return false }
-        switch trigger {
+        guard config.isEnabled(for: query), config.staleTime(for: query) != .static else { return false }
+        switch trigger.resolved(for: query) {
         case .always: return true
         case .ifStale: return isStale(query, config)
-        case .never: return false
+        case .never, .dynamic: return false
         }
     }
 
@@ -296,13 +314,13 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
 
     private func updateTimers() {
         updateStaleTimer()
-        updateIntervalTimer(config.refetchInterval)
+        updateIntervalTimer(config.refetchInterval(for: currentQuery))
     }
 
     private func updateStaleTimer() {
         clearStaleTimer()
-        guard !currentResult.isStale, config.isEnabled,
-              let remaining = currentQuery.timeUntilStale(config.resolvedStaleTime) else { return }
+        guard !currentResult.isStale, config.isEnabled(for: currentQuery),
+              let remaining = currentQuery.timeUntilStale(config.staleTime(for: currentQuery)) else { return }
         staleTimer = QueryTimer(clock: client.clock, after: remaining + .milliseconds(1)) { [weak self] in
             guard let self, !currentResult.isStale else { return }
             updateResult()
@@ -312,7 +330,7 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
     private func updateIntervalTimer(_ interval: Duration?) {
         clearIntervalTimer()
         currentRefetchInterval = interval
-        guard let interval, interval > .zero, config.isEnabled else { return }
+        guard let interval, interval > .zero, config.isEnabled(for: currentQuery) else { return }
         intervalTimer = QueryTimer(clock: client.clock, every: interval) { [weak self] in
             guard let self else { return }
             if config.refetchIntervalInBackground == true || client.focusManager.isFocused { _ = executeFetch() }
@@ -430,7 +448,7 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
                 || state.errorUpdateCount > initialState.errorUpdateCount,
             isPlaceholderData: isPlaceholderData,
             isStale: isStale(query, config),
-            isEnabled: config.isEnabled,
+            isEnabled: config.isEnabled(for: query),
             dataVersion: isPlaceholderData ? -1 : state.dataUpdateCount
         )
     }
@@ -452,8 +470,8 @@ extension QueryObserver where Value == Data {
 }
 
 extension QueryObserver: QueryObserving {
-    var isEnabled: Bool { config.isEnabled }
-    var staleTime: StaleTime { config.resolvedStaleTime }
+    var isEnabled: Bool { config.isEnabled(for: currentQuery) }
+    var staleTime: StaleTime { config.staleTime(for: currentQuery) }
     var resultIsStale: Bool { currentResult.isStale }
     var anyQueryOptions: Any { options.query }
 

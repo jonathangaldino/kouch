@@ -86,6 +86,7 @@ public struct QueryCacheConfig {
 public final class QueryCache {
     public let config: QueryCacheConfig
     var environment: QueryEnvironment!
+    weak var client: QueryClient?
     private var queries: [QueryKey: AnyQuery] = [:]
     private var order: [QueryKey] = []
     private let listeners = Listeners<QueryCacheEvent>()

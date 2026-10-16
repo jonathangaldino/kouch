@@ -15,29 +15,45 @@ public struct MutationConfiguration: Sendable {
     public var networkMode: NetworkMode?
     /// Mutations sharing a scope id run one at a time, in order.
     public var scope: String?
+    public var meta: QueryMeta?
 
     public init(
         gcTime: GCTime? = nil, retry: RetryPolicy? = nil, retryDelay: RetryDelay? = nil,
-        networkMode: NetworkMode? = nil, scope: String? = nil
+        networkMode: NetworkMode? = nil, scope: String? = nil, meta: QueryMeta? = nil
     ) {
         self.gcTime = gcTime
         self.retry = retry
         self.retryDelay = retryDelay
         self.networkMode = networkMode
         self.scope = scope
+        self.meta = meta
     }
 
     func merged(over base: MutationConfiguration) -> MutationConfiguration {
         MutationConfiguration(
             gcTime: gcTime ?? base.gcTime, retry: retry ?? base.retry, retryDelay: retryDelay ?? base.retryDelay,
-            networkMode: networkMode ?? base.networkMode, scope: scope ?? base.scope
+            networkMode: networkMode ?? base.networkMode, scope: scope ?? base.scope, meta: meta ?? base.meta
         )
     }
 }
 
+/// Passed to mutation functions.
+public struct MutationFunctionContext: Sendable {
+    public let client: QueryClient
+    public let meta: QueryMeta?
+    public let mutationKey: QueryKey?
+}
+
+public typealias MutationFunction<Variables, Data> = @Sendable (Variables, MutationFunctionContext) async throws -> Data
+
+public struct MissingMutationFunctionError: Error, Sendable {
+    public let mutationKey: QueryKey?
+}
+
 public struct MutationOptions<Variables: Sendable, Data: Sendable, Context: Sendable> {
     public var mutationKey: QueryKey?
-    public var mutationFn: @Sendable (Variables) async throws -> Data
+    /// Optional when `setMutationDefaults` registered one for `mutationKey`.
+    public var mutationFn: MutationFunction<Variables, Data>?
     /// Runs before `mutationFn`; its return value is passed to the other callbacks as `context`.
     public var onMutate: (@MainActor (Variables) async throws -> Context?)?
     public var onSuccess: (@MainActor (Data, Variables, Context?) async -> Void)?
@@ -52,11 +68,12 @@ public struct MutationOptions<Variables: Sendable, Data: Sendable, Context: Send
         retryDelay: RetryDelay? = nil,
         networkMode: NetworkMode? = nil,
         scope: String? = nil,
+        meta: QueryMeta? = nil,
         onMutate: (@MainActor (Variables) async throws -> Context?)? = nil,
         onSuccess: (@MainActor (Data, Variables, Context?) async -> Void)? = nil,
         onError: (@MainActor (any Error, Variables, Context?) async -> Void)? = nil,
         onSettled: (@MainActor (Data?, (any Error)?, Variables, Context?) async -> Void)? = nil,
-        mutationFn: @escaping @Sendable (Variables) async throws -> Data
+        mutationFn: MutationFunction<Variables, Data>? = nil
     ) {
         self.mutationKey = mutationKey
         self.mutationFn = mutationFn
@@ -64,7 +81,41 @@ public struct MutationOptions<Variables: Sendable, Data: Sendable, Context: Send
         self.onSuccess = onSuccess
         self.onError = onError
         self.onSettled = onSettled
-        self.config = MutationConfiguration(gcTime: gcTime, retry: retry, retryDelay: retryDelay, networkMode: networkMode, scope: scope)
+        self.config = MutationConfiguration(gcTime: gcTime, retry: retry, retryDelay: retryDelay, networkMode: networkMode, scope: scope, meta: meta)
+    }
+
+    /// For mutation functions that don't need the context.
+    public init(
+        mutationKey: QueryKey? = nil,
+        gcTime: GCTime? = nil,
+        retry: RetryPolicy? = nil,
+        retryDelay: RetryDelay? = nil,
+        networkMode: NetworkMode? = nil,
+        scope: String? = nil,
+        meta: QueryMeta? = nil,
+        onMutate: (@MainActor (Variables) async throws -> Context?)? = nil,
+        onSuccess: (@MainActor (Data, Variables, Context?) async -> Void)? = nil,
+        onError: (@MainActor (any Error, Variables, Context?) async -> Void)? = nil,
+        onSettled: (@MainActor (Data?, (any Error)?, Variables, Context?) async -> Void)? = nil,
+        mutationFn: @escaping @Sendable (Variables) async throws -> Data
+    ) {
+        self.init(
+            mutationKey: mutationKey, gcTime: gcTime, retry: retry, retryDelay: retryDelay, networkMode: networkMode,
+            scope: scope, meta: meta, onMutate: onMutate, onSuccess: onSuccess, onError: onError, onSettled: onSettled,
+            mutationFn: { variables, _ in try await mutationFn(variables) }
+        )
+    }
+
+    /// Fills unset functions from `defaults` (TanStack: `{...mutationDefaults, ...options}`).
+    func filled(from defaults: MutationOptions) -> MutationOptions {
+        var merged = self
+        merged.mutationFn = mutationFn ?? defaults.mutationFn
+        merged.onMutate = onMutate ?? defaults.onMutate
+        merged.onSuccess = onSuccess ?? defaults.onSuccess
+        merged.onError = onError ?? defaults.onError
+        merged.onSettled = onSettled ?? defaults.onSettled
+        merged.config = config.merged(over: defaults.config)
+        return merged
     }
 }
 
@@ -100,6 +151,8 @@ public class AnyMutation: Removable {
     public var isPaused: Bool { fatalError("abstract") }
     var scope: String? { fatalError("abstract") }
     func dehydrated() -> DehydratedMutation { fatalError("abstract") }
+    /// The state with types erased (for `MutationCache` listings such as TanStack `useMutationState`).
+    public var stateSnapshot: DehydratedMutationState { dehydrated().state }
     /// Resumes a paused mutation (or re-runs a restored pending one).
     func `continue`() async { fatalError("abstract") }
 
@@ -177,10 +230,21 @@ public final class Mutation<Variables: Sendable, Data: Sendable, Context: Sendab
         }
     }
 
+    /// The mutation's `meta` option.
+    public var meta: QueryMeta? { options.config.meta }
+
     func execute(_ variables: Variables) async throws -> Data {
         let mutationFn = options.mutationFn
+        guard let client = cache?.client else { preconditionFailure("Mutation is not in a client's cache") }
+        let context = MutationFunctionContext(client: client, meta: options.config.meta, mutationKey: options.mutationKey)
+        let mutationKey = options.mutationKey
         let retryer = Retryer<Data>(.init(
-            run: { Task { try await mutationFn(variables) } },
+            run: {
+                Task {
+                    guard let mutationFn else { throw MissingMutationFunctionError(mutationKey: mutationKey) }
+                    return try await mutationFn(variables, context)
+                }
+            },
             onFail: { [weak self] count, error in self?.dispatch(.failed(count, error)) },
             onPause: { [weak self] in self?.dispatch(.pause) },
             onContinue: { [weak self] in self?.dispatch(.continue) },

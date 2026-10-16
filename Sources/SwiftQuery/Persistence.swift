@@ -142,6 +142,9 @@ func jsonValue(_ value: (any Sendable)?) -> QueryKeyValue? {
     }
 }
 
+/// `()` when `T` is `Void` (which can't be encoded, but needs no data to restore).
+func voidValue<T>(_ type: T.Type) -> T? { T.self == Void.self ? (() as! T) : nil }
+
 /// `value` as `T`, decoding it first if it is still encoded.
 func castOrDecode<T>(_ value: (any Sendable)?, as type: T.Type) -> T? {
     if let typed = value as? T { return typed }

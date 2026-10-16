@@ -104,3 +104,48 @@ extension MutationObserver: AdaptableObserver {
 
     public func apply(_ options: MutationOptions<Variables, Data, Context>) { setOptions(options) }
 }
+
+extension QueriesObserver: AdaptableObserver where Value == Data, Combined == [QueryObserverResult<Data>] {
+    public static func make(client: QueryClient, options: [QueryObserverOptions<Data, Data>]) -> Self {
+        Self(client: client, queries: options, combine: { $0 })
+    }
+
+    public func optimisticResult(for options: [QueryObserverOptions<Data, Data>], isRestoring: Bool) -> [QueryObserverResult<Data>] {
+        getOptimisticResult(options, isRestoring: isRestoring)
+    }
+
+    public func apply(_ options: [QueryObserverOptions<Data, Data>]) { setQueries(options) }
+}
+
+/// Backs wrappers that derive one value from a cache (TanStack `useIsFetching`, `useMutationState`).
+@MainActor
+@Observable
+final class CacheValueModel<Value> {
+    @ObservationIgnored private var subscriptions: [Subscription]?
+    private(set) var value: Value?
+
+    nonisolated init() {}
+
+    func update(client: QueryClient, compute: @escaping @MainActor (QueryClient) -> Value) {
+        guard subscriptions == nil else { return }
+        if value == nil { value = compute(client) }
+        // Subscribe after the view update; every cache event recomputes the value.
+        Task { [weak self, weak client] in
+            guard let self, let client, subscriptions == nil else { return }
+            let recompute: @MainActor () -> Void = { [weak self, weak client] in
+                guard let self, let client else { return }
+                value = compute(client)
+            }
+            subscriptions = [
+                client.queryCache.subscribe { _ in recompute() },
+                client.mutationCache.subscribe { _ in recompute() },
+            ]
+            recompute()
+        }
+    }
+
+    deinit {
+        let subscriptions = subscriptions
+        Task { @MainActor in subscriptions?.forEach { $0.cancel() } }
+    }
+}

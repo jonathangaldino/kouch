@@ -54,6 +54,21 @@ public final class QueriesObserver<Data: Sendable, Value: Sendable, Combined: Se
         observers.forEach { $0.destroy() }
     }
 
+    /// What the observer will show for `queries` once applied, without side effects visible to listeners
+    /// (TanStack `getOptimisticResult`). Existing observers are matched by key, as in ``setQueries(_:)``.
+    public func getOptimisticResult(_ queries: [QueryObserverOptions<Data, Value>], isRestoring: Bool = false) -> [QueryObserverResult<Value>] {
+        var available: [QueryKey: [QueryObserver<Data, Value>]] = [:]
+        for observer in observers { available[observer.options.query.key, default: []].append(observer) }
+        return queries.map { options in
+            if var matches = available[options.query.key], !matches.isEmpty {
+                let observer = matches.removeFirst()
+                available[options.query.key] = matches
+                return observer.getOptimisticResult(options, isRestoring: isRestoring)
+            }
+            return QueryObserver(client: client, options: options).getOptimisticResult(options, isRestoring: isRestoring)
+        }
+    }
+
     /// Replaces the list. Entries are matched to existing observers by key, so unchanged keys keep
     /// their observer (no refetch); removed keys unmount; new keys mount.
     public func setQueries(_ queries: [QueryObserverOptions<Data, Value>]) {

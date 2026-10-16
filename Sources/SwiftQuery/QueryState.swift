@@ -58,7 +58,7 @@ public struct QueryState<Data: Sendable>: Sendable {
 
     static func initial(_ options: QueryOptions<Data>, now: Date) -> QueryState {
         var state = QueryState()
-        if let data = options.initialData {
+        if let data = options.initialData ?? options.initialDataFunction?() {
             state.data = data
             state.dataUpdatedAt = options.initialDataUpdatedAt ?? now
             state.status = .success

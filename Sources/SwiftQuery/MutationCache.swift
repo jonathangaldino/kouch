@@ -53,6 +53,7 @@ public struct MutationFilters {
 public final class MutationCache {
     public let config: MutationCacheConfig
     var environment: QueryEnvironment!
+    weak var client: QueryClient?
     private var mutations: [AnyMutation] = []
     private var nextId = 0
     private let listeners = Listeners<MutationCacheEvent>()
@@ -82,6 +83,16 @@ public final class MutationCache {
     public func getAll() -> [AnyMutation] { mutations }
 
     public func findAll(_ filters: MutationFilters = .init()) -> [AnyMutation] { mutations.filter(filters.matches) }
+
+    /// First match for `filters` as given.
+    public func find(_ filters: MutationFilters) -> AnyMutation? {
+        mutations.first(where: filters.matches)
+    }
+
+    /// First mutation with `mutationKey`; exact by default (TanStack `find`), `exact: false` matches by prefix.
+    public func find(mutationKey: QueryKey, exact: Bool = true) -> AnyMutation? {
+        find(MutationFilters(mutationKey: mutationKey, exact: exact))
+    }
 
     public func subscribe(_ listener: @escaping @MainActor (MutationCacheEvent) -> Void) -> Subscription {
         listeners.add(listener)

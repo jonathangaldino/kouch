@@ -63,15 +63,16 @@ WindowGroup {
 
 Persisted data must be `Codable`. It is stored as JSON and decoded the first time its key is read with a type.
 
-`@ObservedInfiniteQuery` (`$feed.fetchNextPage()`) and `@ObservedMutation` (`try await $save.mutate(draft)`)
-work the same way. Like TanStack's React adapter, the wrappers render `getOptimisticResult` during the
+`@ObservedInfiniteQuery` (`$feed.fetchNextPage()`), `@ObservedMutation` (`try await $save.mutate(draft)`),
+`@ObservedQueries` (a list of queries), `@ObservedSelectQuery<Data, Value>` (with `select`), `@ObservedIsFetching`,
+`@ObservedIsMutating` and `@ObservedMutationState` work the same way. Like TanStack's React adapter, the wrappers render `getOptimisticResult` during the
 view update and subscribe / apply new options right after it, so no observable state changes mid-update.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `Specs/` | Behavioral contracts (19 files, 155 scenarios). Each scenario has an ID, for example `[dedup-001]`. |
+| `Specs/` | Behavioral contracts (21 files, 176 scenarios). Each scenario has an ID, for example `[dedup-001]`. |
 | `Conformance/tanstack/` | Every scenario run against real TanStack (vitest with fake timers), including `query-persist-client-core` and `query-async-storage-persister`. |
 | `Sources/SwiftQuery/` | The core implementation. |
 | `Sources/SwiftQuerySwiftUI/` | The SwiftUI adapter. |
@@ -96,19 +97,28 @@ cancellation (including abort-on-unmount when the signal is consumed), invalidat
 focus refetching, mutations (`Mutation`, `MutationCache`, `MutationObserver`, scopes), infinite queries
 (`InfiniteQueryObserver`, `fetchInfiniteQuery`, `maxPages`), `QueriesObserver` with `combine`,
 `dehydrate` / `hydrate`, persistence (`restore` / `save` / `subscribePersistence` / `persist`,
-`StoragePersister` with throttling and `removeOldestQuery` retry, `FileQueryStorage`), and the SwiftUI adapter
-(including restore-before-mount).
+`StoragePersister` with throttling and `removeOldestQuery` retry, `FileQueryStorage`), streamed queries
+(`streamedQuery`, all three refetch modes), `meta`, function contexts (`client`, `meta`, `mutationKey`), options
+computed per query (`StaleTime.dynamic`, `RefetchTrigger.dynamic`, `RefetchInterval.dynamic`, `.enabled { }`,
+`.initialData { }`), `retryOnMount`, `skipToken`, `throwOnError` on refetches, `getQueriesData` /
+`setQueriesData`, `mutationCache.find`, mutations configured entirely through `setMutationDefaults`, and the
+SwiftUI adapter (including restore-before-mount).
 
-Not yet: streamed queries, suspense, per-query persisters (`experimental_createQueryPersister`), and the
-smaller options listed below. Dehydrating pending queries' promises is deliberately out: it only serves
-server-side rendering.
+Deliberately out: per-query persisters (`experimental_createQueryPersister`), devtools, mixed-type
+`QueriesObserver`, and what doesn't apply to Swift (suspense, `fetchOptimistic`, `notifyOnChangeProps`, structural
+sharing, dehydrating pending promises for server-side rendering).
 
 ## Deliberate Swift differences
 
 | TanStack | SwiftQuery | Why |
 |---|---|---|
 | Keys are hashed with JSON.stringify, so `1` and `1.0` are the same key | `QueryKeyValue.int(1)` and `.double(1.0)` are different keys | Swift typing |
-| `staleTime`, `enabled`, etc. can be functions | They are values only | Smaller API. Can be added later. |
+| `staleTime`, `refetchOn*`, `refetchInterval` can be functions | `.dynamic { query in ... }` cases on `StaleTime`, `RefetchTrigger`, `RefetchInterval`; the closure gets `AnyQuery` (cast to `Query<Data>` for typed state) | One option type per tunable |
+| `enabled` / `initialData` can be functions | `.enabled { query in ... }` and `.initialData { ... }` modifiers on `QueryOptions`; `enabled: Bool` stays a plain parameter | Swift binds a trailing closure to the first optional closure parameter, so `queryFn` must be the only one |
+| `queryFn: skipToken` | `skipToken: true` (e.g. `skipToken: id == nil`) | Closures can't be compared, so a sentinel function doesn't work |
+| `useQuery({ throwOnError })` throws to an error boundary | Not ported (no error boundaries); `refetch(throwOnError:)`, `refetchQueries(throwOnError:)` and `invalidateQueries(throwOnError:)` are | Adapter-specific in TanStack |
+| A cancelled streamed query keeps writing chunks unless its stream read the signal | The stream always stops on cancel | Swift cancels the fetch's task on abort |
+| `mutationFn(variables, context)` | `mutationFn` takes `(variables, context)` or just `(variables)` | Most mutation functions don't need the context |
 | Structural sharing (`replaceEqualDeep`) | Not needed | Value types. Change detection uses `Equatable` when `Data` conforms, and otherwise a data version counter. |
 | Tracked-props notifications (`notifyOnChangeProps`) | A listener is notified when the derived result changes | No proxies in Swift |
 | A key can hold any type | One `Data` type per key; a mismatch traps | Type safety (see the `shortcut:` note in `QueryCache.build`) |

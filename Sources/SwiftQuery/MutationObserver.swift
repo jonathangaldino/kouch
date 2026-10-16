@@ -38,16 +38,14 @@ public final class MutationObserver<Variables: Sendable, Data: Sendable, Context
 
     public init(client: QueryClient, options: MutationOptions<Variables, Data, Context>) {
         self.client = client
-        self.options = options
-        self.options.config = options.config.merged(over: client.defaultMutationConfiguration(for: options.mutationKey))
+        self.options = client.defaultMutationOptions(options)
     }
 
     public var hasListeners: Bool { !listeners.isEmpty }
 
     public func setOptions(_ options: MutationOptions<Variables, Data, Context>) {
         let prevKey = self.options.mutationKey
-        self.options = options
-        self.options.config = options.config.merged(over: client.defaultMutationConfiguration(for: options.mutationKey))
+        self.options = client.defaultMutationOptions(options)
         if let prevKey, let key = options.mutationKey, prevKey != key {
             reset()
         } else if let currentMutation, currentMutation.status == .pending {

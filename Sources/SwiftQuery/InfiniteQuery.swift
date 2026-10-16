@@ -25,6 +25,8 @@ public struct InfiniteQueryFunctionContext<PageParam: Sendable>: Sendable {
     }
 
     public var queryKey: QueryKey { base.queryKey }
+    public var client: QueryClient { base.client }
+    public var meta: QueryMeta? { base.meta }
     /// See ``QueryFunctionContext/signal``.
     public var signal: CancellationSignal { base.signal }
 }
@@ -62,8 +64,10 @@ public struct InfiniteQueryOptions<Page: Sendable, PageParam: Sendable> {
         refetchOnMount: RefetchTrigger? = nil,
         refetchOnWindowFocus: RefetchTrigger? = nil,
         refetchOnReconnect: RefetchTrigger? = nil,
-        refetchInterval: Duration? = nil,
+        refetchInterval: RefetchInterval? = nil,
         refetchIntervalInBackground: Bool? = nil,
+        retryOnMount: Bool? = nil,
+        meta: QueryMeta? = nil,
         initialData: InfiniteData<Page, PageParam>? = nil,
         queryFn: @escaping @Sendable (InfiniteQueryFunctionContext<PageParam>) async throws -> Page
     ) {
@@ -79,7 +83,8 @@ public struct InfiniteQueryOptions<Page: Sendable, PageParam: Sendable> {
             staleTime: staleTime, gcTime: gcTime, retry: retry, retryDelay: retryDelay,
             networkMode: networkMode, enabled: enabled, refetchOnMount: refetchOnMount,
             refetchOnWindowFocus: refetchOnWindowFocus, refetchOnReconnect: refetchOnReconnect,
-            refetchInterval: refetchInterval, refetchIntervalInBackground: refetchIntervalInBackground
+            refetchInterval: refetchInterval, refetchIntervalInBackground: refetchIntervalInBackground,
+            retryOnMount: retryOnMount, meta: meta
         )
     }
 

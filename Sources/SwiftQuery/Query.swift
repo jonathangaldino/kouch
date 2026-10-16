@@ -34,8 +34,12 @@ public class AnyQuery: Removable {
     public func isActive() -> Bool { observers.contains { $0.isEnabled } }
 
     public func isDisabled() -> Bool {
-        observers.isEmpty ? !isFetched : !isActive()
+        observers.isEmpty ? (isSkipped || !isFetched) : !isActive()
     }
+
+    var isSkipped: Bool { false }
+    /// The query's `meta` option.
+    public var meta: QueryMeta? { nil }
 
     public func isStatic() -> Bool { observers.contains { $0.staleTime == .static } }
 
@@ -130,6 +134,8 @@ public final class Query<Data: Sendable>: AnyQuery {
     }
 
     override var isFetched: Bool { state.dataUpdateCount + state.errorUpdateCount > 0 }
+    override var isSkipped: Bool { options.skipToken }
+    public override var meta: QueryMeta? { options.config.meta }
 
     func setOptions(_ options: QueryOptions<Data>) {
         var options = options
@@ -153,6 +159,7 @@ public final class Query<Data: Sendable>: AnyQuery {
     }
 
     public func isStaleByTime(_ staleTime: StaleTime) -> Bool {
+        let staleTime = staleTime.resolved(for: self)
         guard state.data != nil else { return true }
         if staleTime == .static { return false }
         if state.isInvalidated { return true }
@@ -161,8 +168,8 @@ public final class Query<Data: Sendable>: AnyQuery {
 
     /// Remaining freshness; `nil` means forever.
     func timeUntilStale(_ staleTime: StaleTime) -> Duration? {
-        switch staleTime {
-        case .infinity, .static: return nil
+        switch staleTime.resolved(for: self) {
+        case .infinity, .static, .dynamic: return nil
         case .duration(let d):
             let updated = state.dataUpdatedAt ?? .distantPast
             let remaining = updated.adding(d).timeIntervalSince(environment.clock.now)
@@ -195,6 +202,13 @@ public final class Query<Data: Sendable>: AnyQuery {
     override func reset() {
         destroy()
         setState(initialState)
+    }
+
+    /// Back to the initial state while a fetch keeps running (streamed queries in `reset` mode).
+    func resetWhileFetching() {
+        var s = initialState
+        s.fetchStatus = .fetching
+        setState(s)
     }
 
     override func dehydrated(at date: Date, serialize: ((QueryKey, any Sendable) -> any Sendable)?) -> DehydratedQuery {
@@ -287,11 +301,13 @@ public final class Query<Data: Sendable>: AnyQuery {
         let abort = AbortController()
         let key = queryKey
         let consumed = signalConsumed
-        let queryFn = options.queryFn
+        let queryFn = options.skipToken ? nil : options.queryFn
         let behavior = options.behavior
         let oldData = state.data
+        guard let client = cache?.client else { preconditionFailure("Query \(queryKey) is not in a client's cache") }
+        let meta = options.config.meta
         let run: @MainActor () -> Task<Data, any Error> = {
-            let context = QueryFunctionContext(queryKey: key, signal: abort.signal, consumed: consumed)
+            let context = QueryFunctionContext(queryKey: key, client: client, meta: meta, signal: abort.signal, consumed: consumed)
             consumed.value = false
             let task = Task<Data, any Error> {
                 if let behavior { return try await behavior(direction, oldData, context) }

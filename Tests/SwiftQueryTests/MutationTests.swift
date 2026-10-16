@@ -16,6 +16,11 @@ private final class DeferredMutation {
 }
 
 @MainActor
+private final class CallCounter {
+    var count = 0
+}
+
+@MainActor
 private final class Log {
     var entries: [String] = []
     func callAsFunction(_ entry: String) { entries.append(entry) }
@@ -120,9 +125,9 @@ struct MutationTests {
     @Test("[mut-005] retries are off by default")
     func noRetryByDefault() async {
         let t = TestEnv()
-        let counter = Immediate(0)
+        let counter = CallCounter()
         let fn: @Sendable (Void) async throws -> String = { @MainActor _ in
-            _ = try await counter.fn(QueryFunctionContext(queryKey: [], signal: .init(), consumed: .init()))
+            counter.count += 1
             throw TestError()
         }
         _ = try? await MutationObserver(client: t.client, options: MutationOptions<Void, String, Void>(mutationFn: fn)).mutate(())
