@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="blob/kouch-logo.png" alt="Kouch logo: the Swift bird lounging on an orange couch, wearing sunglasses" width="200">
+</p>
+
 # Kouch
 
 **Sit back on the couch. Kouch handles the caching.** Fetching, caching, deduplication, background refetching,
@@ -90,11 +94,53 @@ WindowGroup {
 ```
 
 Persisted data must be `Codable`. It is stored as JSON and decoded the first time its key is read with a type.
+`InfiniteData` is not `Codable`, so infinite queries are not persisted.
 
-`@ObservedInfiniteQuery` (`$feed.fetchNextPage()`), `@ObservedMutation` (`try await $save.mutate(draft)`),
-`@ObservedQueries` (a list of queries), `@ObservedSelectQuery<Data, Value>` (with `select`), `@ObservedIsFetching`,
-`@ObservedIsMutating` and `@ObservedMutationState` work the same way. Like TanStack's React adapter, the wrappers render `getOptimisticResult` during the
-view update and subscribe / apply new options right after it, so no observable state changes mid-update.
+Mutations, with an optimistic update that rolls back on failure:
+
+```swift
+struct LikeButton: View {
+    let post: Post
+    @ObservedMutation var like: MutationObserverResult<Int, Post, Post>
+
+    init(post: Post, client: QueryClient) {
+        self.post = post
+        _like = ObservedMutation(MutationOptions(
+            onMutate: { id in // runs first; its return value is the `context` below
+                let previous = client.getQueryData(["post", .int(id)], as: Post.self)
+                client.setQueryData(["post", .int(id)], as: Post.self) { $0?.liked() }
+                return previous
+            },
+            onError: { _, id, previous in if let previous { client.setQueryData(["post", .int(id)], previous) } },
+            onSettled: { _, _, id, _ in await client.invalidateQueries(QueryFilters(queryKey: ["post", .int(id)])) }
+        ) { id in try await api.like(postID: id) })
+    }
+
+    var body: some View {
+        Button("Like") { Task { try? await $like.mutate(post.id) } }.disabled(like.isPending)
+    }
+}
+```
+
+Every wrapper, and its TanStack equivalent:
+
+| Wrapper | TanStack | Projected value (`$name`) |
+|---|---|---|
+| `@ObservedQuery` | `useQuery` | `QueryObserver`: `refetch()` |
+| `@ObservedSelectQuery<Data, Value>` | `useQuery({ select })` | `QueryObserver` |
+| `@ObservedInfiniteQuery` | `useInfiniteQuery` | `InfiniteQueryObserver`: `fetchNextPage()`, `fetchPreviousPage()` |
+| `@ObservedQueries` | `useQueries` | `QueriesObserver` |
+| `@ObservedMutation` | `useMutation` | `MutationObserver`: `mutate(_:)`, `reset()` |
+| `@ObservedIsFetching` | `useIsFetching` | |
+| `@ObservedIsMutating` | `useIsMutating` | |
+| `@ObservedMutationState` | `useMutationState` | |
+
+Like TanStack's React adapter, the wrappers render `getOptimisticResult` during the view update and subscribe /
+apply new options right after it, so no observable state changes mid-update.
+
+To see all of this running, open [`Examples/KouchDemo`](Examples/KouchDemo): a small app on the
+[Star Wars API](https://swapi.dev) with infinite lists, dependent and parallel queries, optimistic mutations,
+retries, polling, a streamed query, persistence and a cache inspector.
 
 ## Layout
 
@@ -106,6 +152,7 @@ view update and subscribe / apply new options right after it, so no observable s
 | `Sources/KouchSwiftUI/` | The SwiftUI adapter. |
 | `Tests/KouchTests/` | Every scenario, mirrored in Swift Testing with a virtual `TestClock`, plus SwiftUI adapter tests (including a real `NSHostingView` render). |
 | `Scripts/check-parity.sh` | Fails if a scenario ID is missing from the specs or from either suite. |
+| `Examples/KouchDemo/` | A small SwiftUI app on [SWAPI](https://swapi.dev) showing the main features. Open `KouchDemo.xcodeproj` and run. |
 
 ## Verify
 
@@ -158,7 +205,7 @@ sharing, dehydrating pending promises for server-side rendering).
 | Dehydrated data is any JSON value | Snapshot data is `any Sendable`; hydrating rebuilds each query with the data's dynamic type, and `deserializeData` gets the key so persisted bytes can be decoded to the right type. A query hydrated without data gets its type on first typed access | Swift generics need concrete types |
 | `hydrate` restores paused mutations using `setMutationDefaults({ mutationFn })` | Same, but the defaults must be registered with the typed `setMutationDefaults(_:_: MutationOptions)` overload; mutations with unregistered keys are skipped | The mutation function and its types must be known to resume |
 | Persisted data is whatever `JSON.stringify` makes of it | Data, variables and context must be `Encodable` to be persisted (others are skipped). They are stored as JSON and decoded lazily with the type of the first typed read; data that no longer decodes is dropped. Errors are not persisted | No runtime type information on disk |
-| `useQuery` supports `select` | `@ObservedQuery<Data>` has no `select`; use `QueryObserver` directly or derive in `body` | Lets the wrapper infer its type from `QueryObserverResult<Data>` |
+| `useQuery` supports `select` | `@ObservedQuery<Data>` has no `select`; use `@ObservedSelectQuery<Data, Value>` | Lets `@ObservedQuery` infer its type from `QueryObserverResult<Data>` |
 
 ## Contributing
 

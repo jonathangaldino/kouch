@@ -14,8 +14,8 @@ import SwiftUI
 ///     }
 /// }
 /// ```
-/// `$user` is the underlying ``QueryObserver`` (for `refetch()`). For `select`, use a ``QueryObserver``
-/// directly; in views, deriving values in `body` is usually enough.
+/// `$user` is the underlying ``QueryObserver`` (for `refetch()`). For `select`, use
+/// ``ObservedSelectQuery``; in views, deriving values in `body` is often enough.
 @propertyWrapper
 public struct ObservedQuery<Data: Sendable>: DynamicProperty {
     @Environment(\.queryClient) private var client
