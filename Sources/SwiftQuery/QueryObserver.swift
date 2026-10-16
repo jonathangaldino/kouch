@@ -84,9 +84,14 @@ public struct QueryObserverResult<Value: Sendable>: Sendable {
 private func sameData<Value>(_ a: Value?, _ b: Value?, _ sameVersion: Bool) -> Bool {
     switch (a, b) {
     case (nil, nil): true
-    case (let a?, let b?): (a as? any Equatable)?.isEqual(to: b) ?? sameVersion
+    case (let a?, let b?): isEqualIfEquatable(a, b) ?? sameVersion
     default: false
     }
+}
+
+/// `a == b` when the dynamic type is `Equatable`, otherwise `nil`.
+func isEqualIfEquatable(_ a: Any, _ b: Any) -> Bool? {
+    (a as? any Equatable)?.isEqual(to: b)
 }
 
 extension Equatable {
@@ -166,7 +171,7 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
 
     private func onMount() {
         currentQuery.addObserver(self)
-        if shouldFetchOnMount(currentQuery) { _ = executeFetch() } else { updateResult() }
+        if shouldFetchOnMount(currentQuery, config) { _ = executeFetch() } else { updateResult() }
         updateTimers()
     }
 
@@ -194,7 +199,7 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
         let mounted = hasListeners
         let queryChanged = currentQuery !== prevQuery
         let enabledChanged = config.isEnabled != prevOptions.query.config.isEnabled
-        if mounted && (queryChanged || !prevOptions.query.config.isEnabled) && isStale(currentQuery) {
+        if mounted && shouldFetchOptionally(currentQuery, prevQuery, config, prevOptions.query.config) {
             _ = executeFetch()
         }
         updateResult()
@@ -218,14 +223,32 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
     /// returns the resulting result.
     @discardableResult
     public func refetch(cancelRefetch: Bool = true) async -> QueryObserverResult<Value> {
-        _ = try? await executeFetch(cancelRefetch: cancelRefetch).value
+        await fetch(cancelRefetch: cancelRefetch)
+    }
+
+    /// Fetches (optionally loading more pages in `direction`) and returns the resulting result.
+    @discardableResult
+    func fetch(cancelRefetch: Bool, direction: FetchDirection? = nil) async -> QueryObserverResult<Value> {
+        _ = try? await executeFetch(cancelRefetch: cancelRefetch, direction: direction).value
         updateResult()
         return currentResult
     }
 
-    private func executeFetch(cancelRefetch: Bool = false) -> Promise<Data> {
+    private func executeFetch(cancelRefetch: Bool = false, direction: FetchDirection? = nil) -> Promise<Data> {
         updateQuery()
-        return currentQuery.fetch(options.query, cancelRefetch: cancelRefetch)
+        return currentQuery.fetch(options.query, cancelRefetch: cancelRefetch, direction: direction)
+    }
+
+    /// What this observer will show for `options` once mounted, without fetching or notifying.
+    /// Adapters call it while rendering, before they subscribe or apply new options. It creates the
+    /// query in the cache and becomes the current result.
+    public func getOptimisticResult(_ options: QueryObserverOptions<Data, Value>) -> QueryObserverResult<Value> {
+        var options = options
+        options.query = client.defaultQueryOptions(options.query)
+        let query = client.queryCache.build(options.query)
+        let next = createResult(query: query, options: options, optimistic: true)
+        if result.map({ !next.isSame(as: $0) }) ?? true { result = next }
+        return next
     }
 
     private func updateQuery() {
@@ -242,20 +265,27 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
 
     // MARK: Fetch decisions
 
-    private func isStale(_ query: Query<Data>) -> Bool {
+    private func isStale(_ query: Query<Data>, _ config: QueryConfiguration) -> Bool {
         config.isEnabled && query.isStaleByTime(config.resolvedStaleTime)
     }
 
-    private func shouldFetchOnMount(_ query: Query<Data>) -> Bool {
+    private func shouldFetchOnMount(_ query: Query<Data>, _ config: QueryConfiguration) -> Bool {
         let shouldLoad = config.isEnabled && query.state.data == nil
-        return shouldLoad || (query.state.data != nil && shouldFetch(on: config.refetchOnMount ?? .ifStale))
+        return shouldLoad || (query.state.data != nil && shouldFetch(query, config, on: config.refetchOnMount ?? .ifStale))
     }
 
-    private func shouldFetch(on trigger: RefetchTrigger) -> Bool {
+    /// After an options change: fetch if the query changed or was disabled, and is stale.
+    private func shouldFetchOptionally(
+        _ query: Query<Data>, _ prevQuery: Query<Data>, _ config: QueryConfiguration, _ prevConfig: QueryConfiguration
+    ) -> Bool {
+        (query !== prevQuery || !prevConfig.isEnabled) && isStale(query, config)
+    }
+
+    private func shouldFetch(_ query: Query<Data>, _ config: QueryConfiguration, on trigger: RefetchTrigger) -> Bool {
         guard config.isEnabled, config.resolvedStaleTime != .static else { return false }
         switch trigger {
         case .always: return true
-        case .ifStale: return isStale(currentQuery)
+        case .ifStale: return isStale(query, config)
         case .never: return false
         }
     }
@@ -306,9 +336,27 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
         var optionsVersion: Int
     }
 
-    private func createResult() -> QueryObserverResult<Value> {
-        let query = currentQuery
-        let state = query.state
+    private func createResult(
+        query: Query<Data>? = nil, options: QueryObserverOptions<Data, Value>? = nil, optimistic: Bool = false
+    ) -> QueryObserverResult<Value> {
+        let query = query ?? currentQuery
+        let options = options ?? self.options
+        let config = options.query.config
+        var state = query.state
+        if optimistic {
+            let fetchOnMount = !hasListeners && shouldFetchOnMount(query, config)
+            let fetchOptionally = hasListeners && shouldFetchOptionally(query, currentQuery, config, self.options.query.config)
+            if fetchOnMount || fetchOptionally {
+                state.fetchFailureCount = 0
+                state.fetchFailureReason = nil
+                state.fetchStatus = environmentCanFetch(query.options) ? .fetching : .paused
+                if state.data == nil {
+                    state.error = nil
+                    state.status = .pending
+                }
+            }
+        }
+        let initialState = query === currentQuery ? currentQueryInitialState : query.state
         var status = state.status
         var error = state.error
         var errorUpdatedAt = state.errorUpdatedAt
@@ -376,10 +424,10 @@ public final class QueryObserver<Data: Sendable, Value: Sendable> {
             failureCount: state.fetchFailureCount,
             failureReason: state.fetchFailureReason,
             isFetched: query.isFetched,
-            isFetchedAfterMount: state.dataUpdateCount > currentQueryInitialState.dataUpdateCount
-                || state.errorUpdateCount > currentQueryInitialState.errorUpdateCount,
+            isFetchedAfterMount: state.dataUpdateCount > initialState.dataUpdateCount
+                || state.errorUpdateCount > initialState.errorUpdateCount,
             isPlaceholderData: isPlaceholderData,
-            isStale: isStale(query),
+            isStale: isStale(query, config),
             isEnabled: config.isEnabled,
             dataVersion: isPlaceholderData ? -1 : state.dataUpdateCount
         )
@@ -412,8 +460,12 @@ extension QueryObserver: QueryObserving {
         if hasListeners { updateTimers() }
     }
 
-    func shouldFetchOnWindowFocus() -> Bool { shouldFetch(on: config.refetchOnWindowFocus ?? .ifStale) }
-    func shouldFetchOnReconnect() -> Bool { shouldFetch(on: config.resolvedRefetchOnReconnect) }
+    func shouldFetchOnWindowFocus() -> Bool { shouldFetch(currentQuery, config, on: config.refetchOnWindowFocus ?? .ifStale) }
+    func shouldFetchOnReconnect() -> Bool { shouldFetch(currentQuery, config, on: config.resolvedRefetchOnReconnect) }
+
+    private func environmentCanFetch(_ options: QueryOptions<Data>) -> Bool {
+        client.environment.canFetch(options.config.resolvedNetworkMode)
+    }
 
     func refetchFromEvent() {
         executeFetch(cancelRefetch: false).onSettle { [weak self] _ in self?.updateResult() }

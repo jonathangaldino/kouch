@@ -56,6 +56,8 @@ public class AnyQuery: Removable {
     public func cancel(revert: Bool = false, silent: Bool = false) async { fatalError("abstract") }
     func cancelNow(_ error: CancelledError) { fatalError("abstract") }
     func reset() { fatalError("abstract") }
+    func dehydrated(at date: Date, serialize: ((QueryKey, any Sendable) -> any Sendable)?) -> DehydratedQuery { fatalError("abstract") }
+    func applyHydrated(_ query: DehydratedQuery, data: (any Sendable)?) { fatalError("abstract") }
     func destroy() {
         clearGcTimer()
         cancelNow(CancelledError(silent: true))
@@ -110,11 +112,11 @@ public final class Query<Data: Sendable>: AnyQuery {
     private var retryer: Retryer<Data>?
     private let signalConsumed = ConsumedFlag()
 
-    init(options: QueryOptions<Data>, cache: QueryCache, environment: QueryEnvironment) {
+    init(options: QueryOptions<Data>, cache: QueryCache, environment: QueryEnvironment, state: QueryState<Data>? = nil) {
         self.options = options
         let initial = QueryState.initial(options, now: environment.clock.now)
         self.initialState = initial
-        self.state = initial
+        self.state = state ?? initial
         super.init(queryKey: options.key, cache: cache, environment: environment)
         updateGcTime(options.config.gcTime)
         scheduleGc()
@@ -130,6 +132,9 @@ public final class Query<Data: Sendable>: AnyQuery {
     override var isFetched: Bool { state.dataUpdateCount + state.errorUpdateCount > 0 }
 
     func setOptions(_ options: QueryOptions<Data>) {
+        var options = options
+        // Like TanStack's sticky queryType: once infinite, always fetched page by page.
+        if options.behavior == nil { options.behavior = self.options.behavior }
         self.options = options
         updateGcTime(options.config.gcTime)
         if state.data == nil {
@@ -192,6 +197,27 @@ public final class Query<Data: Sendable>: AnyQuery {
         setState(initialState)
     }
 
+    override func dehydrated(at date: Date, serialize: ((QueryKey, any Sendable) -> any Sendable)?) -> DehydratedQuery {
+        var erased: DehydratedQueryState = state.map { $0 as any Sendable }
+        if let data = state.data, let serialize { erased.data = serialize(queryKey, data) }
+        return DehydratedQuery(queryKey: queryKey, state: erased, dehydratedAt: date)
+    }
+
+    /// Merges a newer snapshot into this query (TanStack `hydrate` on an existing query).
+    override func applyHydrated(_ query: DehydratedQuery, data: (any Sendable)?) {
+        let typed = data as? Data
+        // shortcut: snapshot data of another type is ignored; deserializeData must return `Data`.
+        if data != nil && typed == nil { return }
+        var s = query.state.typed(data: typed)
+        s.fetchStatus = state.fetchStatus
+        if query.state.status == .pending && typed != nil {
+            s.status = .success
+            s.dataUpdatedAt = query.dehydratedAt
+            if state.fetchStatus != .fetching { s.fetchStatus = .idle }
+        }
+        setState(s)
+    }
+
     // MARK: Observers
 
     func addObserver(_ observer: any QueryObserving) {
@@ -240,7 +266,7 @@ public final class Query<Data: Sendable>: AnyQuery {
     /// Starts a fetch, or joins the one in flight. All callers of an in-flight fetch share one
     /// request. With `cancelRefetch` and existing data, the in-flight request is replaced instead.
     @discardableResult
-    func fetch(_ newOptions: QueryOptions<Data>? = nil, cancelRefetch: Bool = false) -> Promise<Data> {
+    func fetch(_ newOptions: QueryOptions<Data>? = nil, cancelRefetch: Bool = false, direction: FetchDirection? = nil) -> Promise<Data> {
         if state.fetchStatus != .idle && !(retryer?.isRejected ?? false) {
             if state.data != nil && cancelRefetch {
                 cancelNow(CancelledError(silent: true))
@@ -251,9 +277,9 @@ public final class Query<Data: Sendable>: AnyQuery {
         }
 
         if let newOptions { setOptions(newOptions) }
-        if options.queryFn == nil,
+        if options.queryFn == nil && options.behavior == nil,
            let observerOptions = observers.lazy.compactMap({ $0.anyQueryOptions as? QueryOptions<Data> })
-               .first(where: { $0.queryFn != nil })
+               .first(where: { $0.queryFn != nil || $0.behavior != nil })
         {
             setOptions(observerOptions)
         }
@@ -262,10 +288,13 @@ public final class Query<Data: Sendable>: AnyQuery {
         let key = queryKey
         let consumed = signalConsumed
         let queryFn = options.queryFn
+        let behavior = options.behavior
+        let oldData = state.data
         let run: @MainActor () -> Task<Data, any Error> = {
             let context = QueryFunctionContext(queryKey: key, signal: abort.signal, consumed: consumed)
             consumed.value = false
             let task = Task<Data, any Error> {
+                if let behavior { return try await behavior(direction, oldData, context) }
                 guard let queryFn else { throw MissingQueryFunctionError(queryKey: key) }
                 return try await queryFn(context)
             }
@@ -274,7 +303,7 @@ public final class Query<Data: Sendable>: AnyQuery {
         }
 
         revertState = state
-        if state.fetchStatus == .idle { dispatch(.fetch) }
+        if state.fetchStatus == .idle || state.fetchDirection != direction { dispatch(.fetch(direction)) }
 
         let config = options.config
         let retryer = Retryer<Data>(.init(
@@ -330,7 +359,7 @@ public final class Query<Data: Sendable>: AnyQuery {
         case failed(count: Int, error: any Error)
         case pause
         case `continue`
-        case fetch
+        case fetch(FetchDirection?)
         case success(data: Data, updatedAt: Date?, manual: Bool)
         case error(any Error)
         case invalidate
@@ -348,7 +377,8 @@ public final class Query<Data: Sendable>: AnyQuery {
             s.fetchStatus = .paused
         case .continue:
             s.fetchStatus = .fetching
-        case .fetch:
+        case .fetch(let direction):
+            s.fetchDirection = direction
             s.fetchFailureCount = 0
             s.fetchFailureReason = nil
             s.fetchStatus = environment.canFetch(options.config.resolvedNetworkMode) ? .fetching : .paused

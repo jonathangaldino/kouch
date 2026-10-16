@@ -23,6 +23,7 @@ public final class QueryClient {
     let environment: QueryEnvironment
     private var queryDefaults: [(key: QueryKey, config: QueryConfiguration)] = []
     private var mutationDefaults: [(key: QueryKey, config: MutationConfiguration)] = []
+    private var mutationFactories: [(key: QueryKey, make: @MainActor (DehydratedMutation, MutationConfiguration) -> Void)] = []
     private var mountCount = 0
     private var focusSubscription: Subscription?
     private var onlineSubscription: Subscription?
@@ -92,6 +93,35 @@ public final class QueryClient {
     public func setMutationDefaults(_ key: QueryKey, _ config: MutationConfiguration) {
         mutationDefaults.removeAll { $0.key == key }
         mutationDefaults.append((key, config))
+    }
+
+    /// Registers full mutation options (including `mutationFn`) for a key, so dehydrated mutations
+    /// with that key can be restored and resumed after `hydrate`.
+    public func setMutationDefaults<V: Sendable, D: Sendable, C: Sendable>(_ key: QueryKey, _ options: MutationOptions<V, D, C>) {
+        setMutationDefaults(key, options.config)
+        mutationFactories.removeAll { $0.key == key }
+        mutationFactories.append((key, { [unowned self] dehydrated, hydrateConfig in
+            var restored = options
+            restored.mutationKey = dehydrated.mutationKey
+            restored.config = MutationConfiguration(scope: dehydrated.scope)
+                .merged(over: hydrateConfig.merged(over: defaultMutationConfiguration(for: dehydrated.mutationKey)))
+            let s = dehydrated.state
+            var state = MutationState<V, D, C>()
+            state.context = s.context as? C
+            state.data = s.data as? D
+            state.error = s.error
+            state.failureCount = s.failureCount
+            state.failureReason = s.failureReason
+            state.isPaused = s.isPaused
+            state.status = s.status
+            state.variables = s.variables as? V
+            state.submittedAt = s.submittedAt
+            _ = mutationCache.build(restored, state: state)
+        }))
+    }
+
+    func mutationFactory(for key: QueryKey) -> (@MainActor (DehydratedMutation, MutationConfiguration) -> Void)? {
+        mutationFactories.last { key.matches($0.key) }?.make
     }
 
     func defaultMutationConfiguration(for key: QueryKey?) -> MutationConfiguration {

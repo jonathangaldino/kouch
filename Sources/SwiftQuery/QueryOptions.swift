@@ -212,6 +212,10 @@ public struct QueryFunctionContext: Sendable {
 
 public typealias QueryFunction<Data> = @Sendable (QueryFunctionContext) async throws -> Data
 
+/// Replaces the query function for one fetch, given the load-more direction and the data before the
+/// fetch. Infinite queries use it to fetch pages.
+typealias QueryBehavior<Data> = @Sendable (_ direction: FetchDirection?, _ oldData: Data?, _ context: QueryFunctionContext) async throws -> Data
+
 /// Everything that defines a query: its key, how to fetch it and its tunables.
 public struct QueryOptions<Data: Sendable> {
     public var key: QueryKey
@@ -219,6 +223,7 @@ public struct QueryOptions<Data: Sendable> {
     public var initialData: Data?
     public var initialDataUpdatedAt: Date?
     public var config: QueryConfiguration
+    var behavior: QueryBehavior<Data>?
 
     public init(
         key: QueryKey,

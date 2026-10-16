@@ -99,6 +99,7 @@ public class AnyMutation: Removable {
     public var status: MutationStatus { fatalError("abstract") }
     public var isPaused: Bool { fatalError("abstract") }
     var scope: String? { fatalError("abstract") }
+    func dehydrated() -> DehydratedMutation { fatalError("abstract") }
     /// Resumes a paused mutation (or re-runs a restored pending one).
     func `continue`() async { fatalError("abstract") }
 
@@ -127,8 +128,12 @@ public final class Mutation<Variables: Sendable, Data: Sendable, Context: Sendab
     private var observers: [any MutationObserving] = []
     private var retryer: Retryer<Data>?
 
-    init(options: MutationOptions<Variables, Data, Context>, mutationId: Int, cache: MutationCache, environment: QueryEnvironment) {
+    init(
+        options: MutationOptions<Variables, Data, Context>, mutationId: Int, cache: MutationCache,
+        environment: QueryEnvironment, state: MutationState<Variables, Data, Context>? = nil
+    ) {
         self.options = options
+        if let state { self.state = state }
         super.init(mutationId: mutationId, cache: cache, environment: environment)
         updateGcTime(options.config.gcTime)
         scheduleGc()
@@ -139,6 +144,14 @@ public final class Mutation<Variables: Sendable, Data: Sendable, Context: Sendab
     public override var status: MutationStatus { state.status }
     public override var isPaused: Bool { state.isPaused }
     override var scope: String? { options.config.scope }
+
+    override func dehydrated() -> DehydratedMutation {
+        DehydratedMutation(mutationKey: options.mutationKey, scope: options.config.scope, state: DehydratedMutationState(
+            context: state.context, data: state.data, error: state.error, failureCount: state.failureCount,
+            failureReason: state.failureReason, isPaused: state.isPaused, status: state.status,
+            variables: state.variables, submittedAt: state.submittedAt
+        ))
+    }
 
     func setOptions(_ options: MutationOptions<Variables, Data, Context>) {
         self.options = options

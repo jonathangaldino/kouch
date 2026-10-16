@@ -6,9 +6,11 @@ let package = Package(
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "SwiftQuery", targets: ["SwiftQuery"]),
+        .library(name: "SwiftQuerySwiftUI", targets: ["SwiftQuerySwiftUI"]),
     ],
     targets: [
         .target(name: "SwiftQuery"),
-        .testTarget(name: "SwiftQueryTests", dependencies: ["SwiftQuery"]),
+        .target(name: "SwiftQuerySwiftUI", dependencies: ["SwiftQuery"]),
+        .testTarget(name: "SwiftQueryTests", dependencies: ["SwiftQuery", "SwiftQuerySwiftUI"]),
     ]
 )

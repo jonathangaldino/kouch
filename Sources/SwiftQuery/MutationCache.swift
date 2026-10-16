@@ -59,9 +59,9 @@ public final class MutationCache {
 
     public init(config: MutationCacheConfig = .init()) { self.config = config }
 
-    func build<V, D, C>(_ options: MutationOptions<V, D, C>) -> Mutation<V, D, C> {
+    func build<V, D, C>(_ options: MutationOptions<V, D, C>, state: MutationState<V, D, C>? = nil) -> Mutation<V, D, C> {
         nextId += 1
-        let mutation = Mutation(options: options, mutationId: nextId, cache: self, environment: environment)
+        let mutation = Mutation(options: options, mutationId: nextId, cache: self, environment: environment, state: state)
         mutations.append(mutation)
         notify(.added(mutation))
         return mutation

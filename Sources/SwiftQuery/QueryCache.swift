@@ -98,6 +98,7 @@ public final class QueryCache {
     /// typed-key scheme if apps need heterogeneous data under one key.
     func build<Data: Sendable>(_ options: QueryOptions<Data>) -> Query<Data> {
         if let existing = queries[options.key] {
+            if let retyped = retypeIfUntyped(existing, as: options) { return retyped }
             guard let typed = existing as? Query<Data> else {
                 preconditionFailure("Query \(options.key) holds \(type(of: existing)), not Query<\(Data.self)>")
             }
@@ -126,7 +127,21 @@ public final class QueryCache {
     public func clear() { getAll().forEach(remove) }
 
     public func get(_ key: QueryKey) -> AnyQuery? { queries[key] }
-    public func get<Data: Sendable>(_ key: QueryKey, as: Data.Type = Data.self) -> Query<Data>? { queries[key] as? Query<Data> }
+    public func get<Data: Sendable>(_ key: QueryKey, as: Data.Type = Data.self) -> Query<Data>? {
+        guard let existing = queries[key] else { return nil }
+        return existing as? Query<Data> ?? retypeIfUntyped(existing, as: QueryOptions<Data>(key: key))
+    }
+
+    /// A query hydrated without data has no known type yet; the first typed access fixes it.
+    private func retypeIfUntyped<Data: Sendable>(_ existing: AnyQuery, as options: QueryOptions<Data>) -> Query<Data>? {
+        guard let untyped = existing as? Query<UntypedData>, untyped.observersCount == 0 else { return nil }
+        var typedOptions = options
+        typedOptions.config = options.config.merged(over: untyped.options.config)
+        let query = Query(options: typedOptions, cache: self, environment: environment, state: untyped.state.map { _ in nil })
+        untyped.clearGcTimer()
+        queries[options.key] = query
+        return query
+    }
 
     /// All queries in insertion order.
     public func getAll() -> [AnyQuery] { order.compactMap { queries[$0] } }
